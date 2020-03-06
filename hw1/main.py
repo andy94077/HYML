@@ -18,7 +18,13 @@ def load_train_data(hr):
     return trainX, trainY, mean, std
 
 def load_test_data(path, mean, std):
-    pass
+    test = pd.read_csv(path, header=None, encoding = 'big5').iloc[:, 2:]
+    test[test == 'NR'] = 0
+    test = test.to_numpy().reshape(-1, 18, 9).astype(np.float32)
+    test[:, 9] = np.abs(test[:, 9])
+    test = test.reshape(-1, 18 * 9)
+    test = np.concatenate([np.ones((test.shape[0], 1), np.float32), (test - mean) / (std + 1e-10)], axis=1)
+    return test
 
 def train_test_split(X, Y, split_ratio=0.2):
     np.random.seed(880301)
@@ -42,7 +48,7 @@ if __name__ == '__main__':
 
         XTX = trainX.T @ trainX
         XTY = trainX.T @ trainY
-        epoches = 2000
+        epoches = 100000
         best = np.inf
         w = np.random.normal(0, 0.05, size=(trainX.shape[1], 1))
         for epoch in range(epoches):
@@ -55,6 +61,9 @@ if __name__ == '__main__':
                     best = valid_loss
     else:
         w = np.load('model.npy')
+
+    print(f'Training loss: {rmse(trainX, trainY, w)}')
+    print(f'Validation loss: {rmse(validX, validY, w)}')
 
     testX = load_test_data(input_file, mean, std)
     Y = np.clip(np.round(testX @ w), 0, np.inf)

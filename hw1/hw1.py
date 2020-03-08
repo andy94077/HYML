@@ -29,6 +29,7 @@ if __name__ == '__main__':
 
     if training:
         trainX, trainY, mean, std = utils.load_train_data(train_file, 9)
+        print(f'\033[32;1mtrainX: {trainX.shape}, trainY: {trainY.shape}\033[0m')
         np.save('mean.npy', mean)
         np.save('std.npy', std)
 
@@ -42,6 +43,9 @@ if __name__ == '__main__':
             optimizer.update(XTX, XTY, w)
             if epoch % 100 == 0:
                 print(f'epoch {epoch + 100:04}, loss: {rmse(trainX, trainY, w):.5}')
+        a = w[1:].reshape(-1, 9)
+        for i in a:
+            print(('%.3f '*9) % tuple(i))
         np.save(model_path, w)
     else:
         w = np.load(model_path)
@@ -49,12 +53,10 @@ if __name__ == '__main__':
 
     if test:
         testX = utils.load_test_data(test[0], mean, std)
-        Y = np.clip(np.round(testX @ w), 0, np.inf)
-        df = pd.DataFrame(list(zip([f'id_{i}' for i in range(Y.shape[0])], Y.ravel())), columns=['id', 'value'])
-        df.to_csv(test[1], index=False)
+        utils.generate_csv(testX @ w, test[1])
     else:
         if not training:
-            trainX, trainY, mean, std = utils.load_train_data(9)
+            trainX, trainY, mean, std = utils.load_train_data(train_file, 9)
         print(f'Training loss: {rmse(trainX, trainY, w)}')
 
 

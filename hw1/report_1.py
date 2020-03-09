@@ -16,7 +16,7 @@ def compute_gradient(XTX, XTY, w):
     return 2 * (XTX @ w - XTY)
 
 if __name__ == '__main__':
-    trainX, trainY, mean, std = utils.load_train_data(9)
+    trainX, trainY, mean, std = utils.load_train_data(sys.argv[1], 9)
 
     XTX = trainX.T @ trainX
     XTY = trainX.T @ trainY

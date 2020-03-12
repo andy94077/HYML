@@ -1,4 +1,6 @@
 .vscode/
+data/
+model/
 *.csv
 *.npy
 *.jpg

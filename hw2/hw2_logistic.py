@@ -8,14 +8,18 @@ from Adam import Adam
 def sigmoid(s):
     return np.clip(1 / (1 + np.exp(-s)), 1e-8, 1 - 1e-8)
 
+def f(X, w):
+    return sigmoid(X @ w)
+
 def loss(X, Y, w):
-    return np.mean(np.log(1 + np.exp(-(X @ w) * Y)))
+    y_pred = f(X, w)
+    return -np.mean(Y * np.log(y_pred + 1e-10) + (1 - Y) * np.log(1 - y_pred + 1e-10))
 
 def gradient(X, Y, w):
-    return np.mean(sigmoid(-(X @ w) * Y) * (-Y) * X, axis=0).reshape(-1, 1)
+    return X.T @ (f(X, w) - Y) / X.shape[0]
 
 def accuracy(X, Y, w):
-    return np.mean(np.sign(X @ w) == Y.ravel())
+    return np.mean((np.sign(X @ w).ravel() + 1) / 2 == Y.ravel())
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -31,18 +35,17 @@ if __name__ == '__main__':
     test = args.test
 
     if training:
-        trainX, trainY, mean, std = utils.load_train_data(train_file[0], train_file[1], Y_to_sign=True)
+        trainX, trainY, mean, std = utils.load_train_data(train_file[0], train_file[1])
         trainX, validX, trainY, validY = utils.train_test_split(trainX, trainY)
-        #print(validY[:100].ravel())
         print(f'\033[32;1mtrainX: {trainX.shape}, trainY: {trainY.shape}, validX: {validX.shape}, validY: {validY.shape}\033[0m')
         np.save(model_path[:model_path.rfind('.npy')] + '_mean.npy', mean)
         np.save(model_path[:model_path.rfind('.npy')] + '_std.npy', std)
 
-        optimizer = Adam(gradient, 0.1)
+        optimizer = Adam(gradient, 1e-4)
 
-        epochs = 400
-        batch_size = 32
-        w = np.random.normal(0, 0.05, size=(trainX.shape[1], 1)).astype(np.float32)
+        epochs = 100
+        batch_size = 64
+        w = np.zeros((trainX.shape[1], 1), np.float32)
         for epoch in range(1, epochs + 1):
             idx = np.random.permutation(trainX.shape[0])
             shuffleX, shuffleY = trainX[idx], trainY[idx]
@@ -51,7 +54,7 @@ if __name__ == '__main__':
                 optimizer.update(batchX, batchY, w)
                 if i % (batch_size * 10) == 0:
                     print(f'epoch {epoch:04}, {i:05}/{trainX.shape[0]}, loss: {loss(batchX, batchY, w):.5}, acc: {accuracy(batchX, batchY, w):.4}', end='\r')
-            print(f'epoch {epoch:04}, loss: {loss(trainX, trainY, w):.5}, acc: {accuracy(trainX, trainY, w):.4}, valid_loss: {loss(validX, validY, w):.5}, valid_acc: {accuracy(validX, validY, w):.4}')
+            print(f'epoch {epoch:04}, loss: {loss(trainX, trainY, w):<07.5}, acc: {accuracy(trainX, trainY, w):.4}, valid_loss: {loss(validX, validY, w):<07.5}, valid_acc: {accuracy(validX, validY, w):.4}')
         np.save(model_path, w)
     else:
         w = np.load(model_path)
@@ -59,11 +62,11 @@ if __name__ == '__main__':
 
     if test:
         testX = utils.load_test_data(test[0], mean, std)
-        utils.generate_csv(sigmoid(testX @ w), test[1])
+        utils.generate_csv(f(testX, w), test[1])
     else:
         if not training:
-            trainX, trainY, mean, std = utils.load_train_data(train_file, Y_to_sign=True)
-            trainX, validX, trainY, validY = utils.train_test_split(trainX, trainY, 0.1)
+            trainX, trainY, mean, std = utils.load_train_data(train_file[0], train_file[1])
+            trainX, validX, trainY, validY = utils.train_test_split(trainX, trainY)
         print(f'loss: {loss(trainX, trainY, w):.5}, acc: {accuracy(trainX, trainY, w):.4}, valid_loss: {loss(validX, validY, w):.5}, valid_acc: {accuracy(validX, validY, w):.4}')
 
 

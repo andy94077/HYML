@@ -44,6 +44,6 @@ def save_model(path, model):
 
 def generate_csv(y_pred, output_file):
     Y = np.round(y_pred).astype(np.int)
-    df = pd.DataFrame(list(zip(range(1, Y.shape[0] + 1), Y.ravel())), columns=['id', 'label'])
+    df = pd.DataFrame(list(zip(range(Y.shape[0]), Y.ravel())), columns=['id', 'label'])
     df.to_csv(output_file, index=False)
 

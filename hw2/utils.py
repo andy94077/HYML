@@ -14,19 +14,21 @@ def data_preprocessing(X):
             else:
                 X[i, 9, j] = (X[i, 9, j - 1] + X[i, 9, j + 1]) / 2
 
-def load_train_data(trainX_path, trainY_path, Y_to_sign=False):
+def load_train_data(trainX_path, trainY_path, normalize=True):
     trainX = pd.read_csv(trainX_path).iloc[:, 1:].to_numpy().astype(np.float32)
     mean = np.mean(trainX, axis=0)
     std = np.std(trainX, axis=0)
-    trainX = np.concatenate([np.ones((trainX.shape[0], 1), np.float32), (trainX - mean) / (std + 1e-10)], axis=1)
     trainY = pd.read_csv(trainY_path).iloc[:, 1:2].to_numpy().astype(np.float32)
-    if Y_to_sign:
-        trainY = trainY * 2 - 1
+    if normalize:
+        trainX = (trainX - mean) / (std + 1e-10)
+    trainX = np.concatenate([np.ones((trainX.shape[0], 1), np.float32), trainX], axis=1)
     return trainX, trainY, mean, std
 
-def load_test_data(path, mean, std):
+def load_test_data(path, mean=None, std=None):
     test = pd.read_csv(path).iloc[:, 1:].to_numpy().astype(np.float32)
-    test = np.concatenate([np.ones((test.shape[0], 1), np.float32), (test - mean) / (std + 1e-10)], axis=1)
+    if mean is not None and std is not None:
+        test = (test - mean) / (std + 1e-10)
+    test = np.concatenate([np.ones((test.shape[0], 1), np.float32), test], axis=1)
     return test
 
 def train_test_split(X, Y, split_ratio=0.2):

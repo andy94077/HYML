@@ -31,8 +31,8 @@ def load_test_data(path, mean=None, std=None):
     test = np.concatenate([np.ones((test.shape[0], 1), np.float32), test], axis=1)
     return test
 
-def train_test_split(X, Y, split_ratio=0.2):
-    np.random.seed(880301)
+def train_test_split(X, Y, split_ratio=0.2, seed=880301):
+    np.random.seed(seed)
     idx = np.random.permutation(X.shape[0])
     return X[:-int(X.shape[0] * split_ratio)], X[-int(X.shape[0] * split_ratio):], Y[:-int(Y.shape[0] * split_ratio)], Y[-int(Y.shape[0] * split_ratio):]
 

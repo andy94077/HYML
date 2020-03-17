@@ -14,12 +14,13 @@ def data_preprocessing(X):
             else:
                 X[i, 9, j] = (X[i, 9, j - 1] + X[i, 9, j + 1]) / 2
 
-def load_train_data(path, hr):
+def load_train_data(path, hr, preprocessing=True):
     train = pd.read_csv(path, encoding = 'big5').iloc[:, 3:]
     train[train == 'NR'] = 0
     train = train.to_numpy().reshape(12, 20, 18, 24).astype(np.float32) # month, day, measurement, time
     train = np.transpose(train, [0, 2, 1, 3]).reshape(12, 18, -1) # month, measurement, day * time
-    data_preprocessing(train)
+    if preprocessing:
+        data_preprocessing(train)
     trainX = np.concatenate([m[:, i:i+hr].reshape(1, -1) for m in train for i in range(m.shape[1] - hr)], axis=0)
     mean = np.mean(trainX, axis=0)
     std = np.std(trainX, axis=0)
@@ -47,11 +48,12 @@ def load_train_data_sin(path, hr):
     trainX = np.concatenate([np.ones((trainX.shape[0], 1), np.float32), (trainX - mean) / (std + 1e-10)], axis=1)
     return trainX, trainY, mean, std
 
-def load_test_data(path, mean, std):
+def load_test_data(path, mean, std, preprocessing=True):
     test = pd.read_csv(path, header=None, encoding = 'big5').iloc[:, 2:]
     test[test == 'NR'] = 0
     test = test.to_numpy().reshape(-1, 18, 9).astype(np.float32)
-    data_preprocessing(test)
+    if preprocessing:
+        data_preprocessing(test)
     test = test.reshape(-1, 18 * 9)
     test = np.concatenate([np.ones((test.shape[0], 1), np.float32), (test - mean) / (std + 1e-10)], axis=1)
     return test

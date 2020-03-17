@@ -16,7 +16,7 @@ def loss(X, Y, w):
     return -np.mean(Y * np.log(y_pred + 1e-10) + (1 - Y) * np.log(1 - y_pred + 1e-10))
 
 def gradient(X, Y, w):
-    return X.T @ (f(X, w) - Y) / X.shape[0]
+    return X.T @ (f(X, w) - Y) / X.shape[0]# + 1e-4 * 2 * w ** 2
 
 def accuracy(X, Y, w):
     return np.mean((np.sign(X @ w).ravel() + 1) / 2 == Y.ravel())
@@ -52,9 +52,7 @@ if __name__ == '__main__':
             for i in range(0, idx.shape[0], batch_size):
                 batchX, batchY = shuffleX[i:i + batch_size], shuffleY[i:i + batch_size]
                 optimizer.update(batchX, batchY, w)
-                if i % (batch_size * 10) == 0:
-                    print(f'epoch {epoch:04}, {i:05}/{trainX.shape[0]}, loss: {loss(batchX, batchY, w):.5}, acc: {accuracy(batchX, batchY, w):.4}', end='\r')
-            print(f'epoch {epoch:04}, loss: {loss(trainX, trainY, w):<07.5}, acc: {accuracy(trainX, trainY, w):.4}, valid_loss: {loss(validX, validY, w):<07.5}, valid_acc: {accuracy(validX, validY, w):.4}')
+            print(f'epoch {epoch:03}/{epochs:03}, loss: {loss(trainX, trainY, w):<07.5}, acc: {accuracy(trainX, trainY, w):.4}, valid_loss: {loss(validX, validY, w):<07.5}, valid_acc: {accuracy(validX, validY, w):.4}')
         np.save(model_path, w)
     else:
         w = np.load(model_path)

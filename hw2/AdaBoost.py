@@ -70,6 +70,8 @@ if __name__ == "__main__":
 	
 	if test:
 		testX = utils.load_test_data(test[0], mean, std)
-		utils.generate_csv((G_func(G, testX) + 1) / 2, test[1])
+		pred = (G_func(G, testX) + 1) / 2
+		utils.generate_csv(pred, test[1])
+		np.save(test[1] + '.npy', pred)
 	else:
 		print(f'acc: {accuracy(trainX, trainY, G):.4}, valid_acc: {accuracy(validX, validY, G):.4}')

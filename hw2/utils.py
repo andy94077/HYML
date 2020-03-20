@@ -3,19 +3,17 @@ import pandas as pd
 import pickle
 
 def data_preprocessing(X):
-    for i in range(X.shape[0]):
-        for j in range(X.shape[-1]):
-            if X[i, 9, j] >= 0:
-                continue
-            if j == 0:
-                X[i, 9, j] = X[i, 9, min(j + 1, X.shape[-1])]
-            elif j == X.shape[-1] - 1:
-                X[i, 9, j] = X[i, 9, max(j - 1, 0)]
-            else:
-                X[i, 9, j] = (X[i, 9, j - 1] + X[i, 9, j + 1]) / 2
+    X = np.concatenate([X.to_numpy(), X['age'].to_numpy()[:, np.newaxis]**2], axis=1)
+    #X = np.concatenate([X.to_numpy(), X['age'].to_numpy()[:, np.newaxis]**2, X['capital gains'].to_numpy()[:, np.newaxis] * X['capital losses'].to_numpy()[:, np.newaxis], X['dividends from stocks'].to_numpy()[:, np.newaxis]**2], axis=1)
+    return X.astype(np.float32)
 
-def load_train_data(trainX_path, trainY_path, normalize=True):
-    trainX = pd.read_csv(trainX_path).iloc[:, 1:].to_numpy().astype(np.float32)
+def load_train_data(trainX_path, trainY_path, normalize=True, preprocessing=False):
+    trainX = pd.read_csv(trainX_path).iloc[:, 1:]#.to_numpy().astype(np.float32)
+    if preprocessing:
+        trainX = data_preprocessing(trainX)
+    else:
+        trainX = trainX.to_numpy().astype(np.float32)
+    #trainX = np.concatenate([trainX, trainX[:, 0:1] ** 2], axis=1)
     mean = np.mean(trainX, axis=0)
     std = np.std(trainX, axis=0)
     trainY = pd.read_csv(trainY_path).iloc[:, 1:2].to_numpy().astype(np.float32)
@@ -24,8 +22,12 @@ def load_train_data(trainX_path, trainY_path, normalize=True):
     trainX = np.concatenate([np.ones((trainX.shape[0], 1), np.float32), trainX], axis=1)
     return trainX, trainY, mean, std
 
-def load_test_data(path, mean=None, std=None):
-    test = pd.read_csv(path).iloc[:, 1:].to_numpy().astype(np.float32)
+def load_test_data(path, mean=None, std=None, preprocessing=False):
+    test = pd.read_csv(path).iloc[:, 1:]#.to_numpy().astype(np.float32)
+    if preprocessing:
+        test = data_preprocessing(test)
+    else:
+        test = test.to_numpy().astype(np.float32)
     if mean is not None and std is not None:
         test = (test - mean) / (std + 1e-10)
     test = np.concatenate([np.ones((test.shape[0], 1), np.float32), test], axis=1)

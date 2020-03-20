@@ -34,16 +34,13 @@ if __name__ == '__main__':
     training = not args.no_training
     test = args.test
 
+    trainX, trainY, mean, std = utils.load_train_data(train_file[0], train_file[1], preprocessing=True)
+    trainX, validX, trainY, validY = utils.train_test_split(trainX, trainY)
+    print(f'\033[32;1mtrainX: {trainX.shape}, trainY: {trainY.shape}, validX: {validX.shape}, validY: {validY.shape}\033[0m')
     if training:
-        trainX, trainY, mean, std = utils.load_train_data(train_file[0], train_file[1])
-        trainX, validX, trainY, validY = utils.train_test_split(trainX, trainY)
-        print(f'\033[32;1mtrainX: {trainX.shape}, trainY: {trainY.shape}, validX: {validX.shape}, validY: {validY.shape}\033[0m')
-        np.save(model_path[:model_path.rfind('.npy')] + '_mean.npy', mean)
-        np.save(model_path[:model_path.rfind('.npy')] + '_std.npy', std)
-
         optimizer = Adam(gradient, 1e-4)
 
-        epochs = 100
+        epochs = 150
         batch_size = 64
         w = np.zeros((trainX.shape[1], 1), np.float32)
         for epoch in range(1, epochs + 1):
@@ -56,15 +53,11 @@ if __name__ == '__main__':
         np.save(model_path, w)
     else:
         w = np.load(model_path)
-        mean, std = np.load(model_path[:model_path.rfind('.npy')] + '_mean.npy'), np.load(model_path[:model_path.rfind('.npy')] + '_std.npy')
 
     if test:
-        testX = utils.load_test_data(test[0], mean, std)
+        testX = utils.load_test_data(test[0], mean, std, preprocessing=True)
         utils.generate_csv(f(testX, w), test[1])
     else:
-        if not training:
-            trainX, trainY, mean, std = utils.load_train_data(train_file[0], train_file[1])
-            trainX, validX, trainY, validY = utils.train_test_split(trainX, trainY)
         print(f'loss: {loss(trainX, trainY, w):.5}, acc: {accuracy(trainX, trainY, w):.4}, valid_loss: {loss(validX, validY, w):.5}, valid_acc: {accuracy(validX, validY, w):.4}')
 
 

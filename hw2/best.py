@@ -51,12 +51,11 @@ if __name__ == '__main__':
     if training:
         checkpoint = ModelCheckpoint(model_path, 'val_loss', verbose=1, save_best_only=True, save_weights_only=True)
         reduce_lr = ReduceLROnPlateau('val_loss', 0.8, 4, verbose=1, min_lr=1e-6)
-        logger = CSVLogger(model_path+'.csv')
+        #logger = CSVLogger(model_path+'.csv')
         #tensorboard = TensorBoard(model_path[:model_path.rfind('.')]+'_logs', histogram_freq=1, batch_size=1024, write_grads=True, update_freq='epoch')
-        model.fit(trainX, trainY, batch_size=128, epochs=100, validation_data=(validX, validY), verbose=1, callbacks=[checkpoint, reduce_lr, logger])
+        model.fit(trainX, trainY, batch_size=128, epochs=100, validation_data=(validX, validY), verbose=1, callbacks=[checkpoint, reduce_lr])
     else:
         print('\033[32;1mLoading Model\033[0m')
-        model.load_weights(model_path)
 
     model.load_weights(model_path)
     if test:

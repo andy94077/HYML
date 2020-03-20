@@ -28,6 +28,7 @@ if __name__ == '__main__':
     parser.add_argument('-T', '--no-training', action='store_true')
     parser.add_argument('-s', '--test', nargs=2, help='testing file and the predicted file')
     parser.add_argument('-p', '--preprocessing', action='store_true', help='preprocess testing file and the predicted file')
+    parser.add_argument('-e', '--ensemble', action='store_true', help='output npy file to ensemble later')
     args = parser.parse_args()
 
     model_path = args.model_path
@@ -35,6 +36,7 @@ if __name__ == '__main__':
     training = not args.no_training
     test = args.test
     preprocessing = args.preprocessing
+    ensemble = args.ensemble
 
     trainX, trainY, mean, std = utils.load_train_data(train_file[0], train_file[1], preprocessing=preprocessing)
     trainX, validX, trainY, validY = utils.train_test_split(trainX, trainY)
@@ -58,8 +60,10 @@ if __name__ == '__main__':
 
     if test:
         testX = utils.load_test_data(test[0], mean, std, preprocessing=preprocessing)
-        utils.generate_csv(f(testX, w), test[1])
-        np.save(test[1] + '.npy', f(testX, w))
+        if ensemble:
+            np.save(test[1], f(testX, w))
+        else:
+            utils.generate_csv(f(testX, w), test[1])
     else:
         print(f'loss: {loss(trainX, trainY, w):.5}, acc: {accuracy(trainX, trainY, w):.4}, valid_loss: {loss(validX, validY, w):.5}, valid_acc: {accuracy(validX, validY, w):.4}')
 

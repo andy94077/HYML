@@ -13,17 +13,12 @@ import utils
 
 def build_model(input_dim):
     ii = Input((input_dim,), name='input')
-    #x = Dense(64, activation='relu')(ii)
-    #x = Dropout(0.2)(x)
-    #x = Dense(128, activation='relu')(x)#, kernel_regularizer=l2(1e-3))(x)
-    #x = Dropout(0.2)(x)
-    #x = BatchNormalization()(x)
     x = Dense(32, activation='sigmoid')(ii)
-    out = Dense(1, activation='sigmoid', name='output')(x)#, kernel_regularizer=l2(5e-4))(x)
+    out = Dense(1, activation='sigmoid', name='output')(x)
     return Model(ii, out)
 
 if __name__ == '__main__':
-    os.environ['CUDA_VISIBLE_DEVICES'] = '7' 
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0' 
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     sess = tf.Session(config=config)
@@ -46,7 +41,7 @@ if __name__ == '__main__':
     print(f'\033[32;1mtrainX: {trainX.shape}, trainY: {trainY.shape}, validX: {validX.shape}, validY: {validY.shape}\033[0m')
 
     model = build_model(trainX.shape[1])
-    model.compile(Adam(1e-4), loss='binary_crossentropy', metrics=['acc'])#, 'binary_crossentropy'])
+    model.compile(Adam(1e-4), loss='binary_crossentropy', metrics=['acc'])
 
     if training:
         checkpoint = ModelCheckpoint(model_path, 'val_loss', verbose=1, save_best_only=True, save_weights_only=True)
@@ -60,7 +55,9 @@ if __name__ == '__main__':
     model.load_weights(model_path)
     if test:
         testX = utils.load_test_data(test[0], mean, std)
-        utils.generate_csv(model.predict(testX), test[1])
+        pred = model.predict(testX)
+        utils.generate_csv(pred, test[1])
+        np.save(test[1] + '.npy', pred)
     else:
         print(f'\033[32;1mTraining score: {model.evaluate(trainX, trainY, batch_size=256, verbose=0)}\033[0m')
         print(f'\033[32;1mValidaiton score: {model.evaluate(validX, validY, batch_size=256, verbose=0)}\033[0m')

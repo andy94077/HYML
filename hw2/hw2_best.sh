@@ -1,0 +1,10 @@
+X_train="$3"
+Y_train="$4"
+X_test="$5"
+result="$6"
+
+python3 hw2_logistic.py model/logistic_fe.npy -p -t "$X_train" "$Y_train" -Ts "$X_test" "$result.1"
+python3 best.py model/best32-1.h5 -t "$X_train" "$Y_train" -Ts "$X_test" "$result.2"
+python3 AdaBoost.py model/adaboost.npy -t "$X_train" "$Y_train" -Ts "$X_test" "$result.3"
+python3 ensemble.py "$result" "$result.1.npy" "$result.2.npy" "$result.3.npy"
+rm -f "$result.1" "$result.2" "$result.3" "$result.1.npy" "$result.2.npy" "$result.3.npy"

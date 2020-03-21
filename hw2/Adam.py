@@ -8,8 +8,8 @@ class Adam():
 		self.m = self.v = 0.0
 		self.gradient_func = gradient_func
 
-	def update(self, X, Y, w):
-		g = self.gradient_func(X, Y, w)
+	def update(self, X, Y, w, *args):
+		g = self.gradient_func(X, Y, w, *args)
 		self.m = self.beta1 * self.m + (1 - self.beta1) * g
 		self.v = self.beta2 * self.v + (1 - self.beta2) * g ** 2
 		self.beta1_power *= self.beta1

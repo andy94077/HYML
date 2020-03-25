@@ -76,7 +76,7 @@ def load_test_data_sin(path, mean, std):
 def train_test_split(X, Y, split_ratio=0.2):
     np.random.seed(880301)
     idx = np.random.permutation(X.shape[0])
-    return X[:-int(X.shape[0] * split_ratio)], X[-int(X.shape[0] * split_ratio):], Y[:-int(Y.shape[0] * split_ratio)], Y[-int(Y.shape[0] * split_ratio):]
+    return X[idx[:-int(X.shape[0] * split_ratio)]], X[idx[-int(X.shape[0] * split_ratio):]], Y[idx[:-int(Y.shape[0] * split_ratio)]], Y[idx[-int(Y.shape[0] * split_ratio):]]
 
 def load_model(path):
     with open(path, 'rb') as f:

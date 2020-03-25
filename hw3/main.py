@@ -11,7 +11,6 @@ from keras import backend as K
 import tensorflow as tf
 
 import utils
-from GoogleNet import GoogleNet
 
 def build_model(input_shape, output_dim):
     model = Sequential([
@@ -42,7 +41,7 @@ def build_model(input_shape, output_dim):
         ])
     return model
 
-def build_model2(input_shape, output_dim):
+def build_model2(input_shape, output_dim): #{{{
     model = Sequential([
         Conv2D(64, 3, padding='same', activation='relu', input_shape=input_shape),
         Conv2D(64, 3, padding='same', activation='relu'),
@@ -73,7 +72,7 @@ def build_model2(input_shape, output_dim):
         Dropout(0.3),
         Dense(output_dim, activation='softmax')
         ])
-    return model
+    return model #}}}
 
 if __name__ == '__main__':
     os.environ['CUDA_VISIBLE_DEVICES'] = '3' 
@@ -85,8 +84,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('data_dir')
     parser.add_argument('model_path')
+    parser.add_argument('-f', '--model-function', default='build_model')
     parser.add_argument('-T', '--no-training', action='store_true')
     parser.add_argument('-s', '--test', type=str, help='predicted file')
+    parser.add_argument('-r', '--seed', type=int, default=880301, help='random seed')
     parser.add_argument('-e', '--ensemble', action='store_true', help='output npy file to ensemble later')
     args = parser.parse_args()
 
@@ -95,21 +96,19 @@ if __name__ == '__main__':
     training = not args.no_training
     test = args.test
     ensemble = args.ensemble
-    input_shape = (128, 128)#(224, 224)
+    function = args.model_function
+    seed = args.seed
+    input_shape = (128, 128)
 
     if training:
         trainX, trainY = utils.load_train_data(data_dir, input_shape)
-        #validX, validY = utils.load_valid_data(data_dir, input_shape)
-        trainX, validX, trainY, validY = utils.train_test_split(trainX, trainY, split_ratio=0.1, seed=1126)
+        trainX, validX, trainY, validY = utils.train_test_split(trainX, trainY, split_ratio=0.1, seed=seed)
         print(f'\033[32;1mtrainX: {trainX.shape}, trainY: {trainY.shape}, validX: {validX.shape}, validY: {validY.shape}\033[0m')
-        #print(np.histogram(np.argmax(validY, 1), range(12))[0]/np.histogram(np.argmax(trainY, 1), range(12))[0])
-        #train_gen = ImageDataGenerator(rotation_range=15, width_shift_range=0.1, height_shift_range=0.1, brightness_range=(-1, 1), horizontal_flip=True, fill_mode='constant', cval=0)
         train_gen = ImageDataGenerator(rotation_range=15, width_shift_range=0.1, height_shift_range=0.1, horizontal_flip=True, fill_mode='constant', cval=0)
 
-    #model = GoogleNet(input_shape + (3,), 11)
     model = build_model(input_shape + (3,), 11)
     model.compile(Adam(1.5e-3), loss='categorical_crossentropy', metrics=['acc'])
-    #model.summary()
+    model.summary()
 
     if training:
         batch_size = 128
@@ -130,6 +129,10 @@ if __name__ == '__main__':
         else:
             utils.generate_csv(pred, test)
     else:
+        if not training:
+            trainX, trainY = utils.load_train_data(data_dir, input_shape)
+            trainX, validX, trainY, validY = utils.train_test_split(trainX, trainY, split_ratio=0.1, seed=seed)
+            print(f'\033[32;1mtrainX: {trainX.shape}, trainY: {trainY.shape}, validX: {validX.shape}, validY: {validY.shape}\033[0m')
         print(f'\033[32;1mTraining score: {model.evaluate(trainX, trainY, batch_size=256, verbose=0)}\033[0m')
         print(f'\033[32;1mValidaiton score: {model.evaluate(validX, validY, batch_size=256, verbose=0)}\033[0m')
         

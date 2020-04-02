@@ -18,22 +18,7 @@ def read_image(data_dir, input_shape, with_label=True):
 def data_preprocessing(X):
     return X ** (1 / 1.5)
 
-def load_valid_data(data_dir, img_shape, preprocessing=False):
-    if os.path.exists(os.path.join(data_dir, 'validX.npy')) and os.path.exists(os.path.join(data_dir, 'validY.npy')):
-        validX = np.load(os.path.join(data_dir, 'validX.npy'))
-        validY = np.load(os.path.join(data_dir, 'validY.npy'))
-    else:
-        validX, validY = read_image(os.path.join(data_dir, 'validation'), img_shape)
-        np.save(os.path.join(data_dir, 'validX.npy'), validX)
-        np.save(os.path.join(data_dir, 'validY.npy'), validY)
-    validX = validX.astype(np.float32)
-    validX /= 255#(validX - 127.5) / 128
-    if preprocessing:
-        validX = data_preprocessing(validX)
-    validY = to_categorical(validY)
-    return validX, validY
-
-def load_train_data(data_dir, img_shape, preprocessing=False):
+def load_train_data(data_dir, img_shape, normalize=True, preprocessing=False):
     if os.path.exists(os.path.join(data_dir, f'trainX{img_shape[0]}.npy')) and os.path.exists(os.path.join(data_dir, f'trainY{img_shape[0]}.npy')):
         trainX = np.load(os.path.join(data_dir, f'trainX{img_shape[0]}.npy'))
         trainY = np.load(os.path.join(data_dir, f'trainY{img_shape[0]}.npy'))
@@ -42,16 +27,18 @@ def load_train_data(data_dir, img_shape, preprocessing=False):
         np.save(os.path.join(data_dir, f'trainX{img_shape[0]}.npy'), trainX)
         np.save(os.path.join(data_dir, f'trainY{img_shape[0]}.npy'), trainY)
     trainX = trainX.astype(np.float32)
-    trainX /= 255#(trainX - 127.5) / 128
+    if normalize:
+        trainX /= 255#(trainX - 127.5) / 128
     if preprocessing:
         trainX = data_preprocessing(trainX)
     trainY = to_categorical(trainY)
     return trainX, trainY
 
-def load_test_data(data_dir, img_shape, preprocessing=False):
+def load_test_data(data_dir, img_shape, normalize=True, preprocessing=False):
     test = read_image(os.path.join(data_dir, 'testing'), img_shape, with_label=False)
     test = test.astype(np.float32)
-    test /= 255#(test - 127.5) / 128
+    if normalize:
+        test /= 255#(test - 127.5) / 128
     if preprocessing:
         test = data_preprocessing(test)
     return test

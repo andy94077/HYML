@@ -89,6 +89,7 @@ if __name__ == '__main__':
     parser.add_argument('-T', '--no-training', action='store_true')
     parser.add_argument('-s', '--test', type=str, help='predicted file')
     parser.add_argument('-r', '--seed', type=int, default=880301, help='random seed')
+    parser.add_argument('-N', '--no-normalize', action='store_true')
     parser.add_argument('-e', '--ensemble', action='store_true', help='output npy file to ensemble later')
     parser.add_argument('-lr', type=float, default=1.5e-3, help='learning rate')
     args = parser.parse_args()
@@ -100,11 +101,12 @@ if __name__ == '__main__':
     ensemble = args.ensemble
     function = args.model_function
     seed = args.seed
+    normalize = not args.no_normalize
     lr = args.lr
     input_shape = (128, 128)
 
     if training:
-        trainX, trainY = utils.load_train_data(data_dir, input_shape, preprocessing=True)
+        trainX, trainY = utils.load_train_data(data_dir, input_shape, normalize=normalize, preprocessing=True)
         trainX, validX, trainY, validY = utils.train_test_split(trainX, trainY, split_ratio=0.1, seed=seed)
         print(f'\033[32;1mtrainX: {trainX.shape}, trainY: {trainY.shape}, validX: {validX.shape}, validY: {validY.shape}\033[0m')
         train_gen = ImageDataGenerator(rotation_range=15, width_shift_range=0.1, height_shift_range=0.1, horizontal_flip=True, fill_mode='constant', cval=0)
@@ -127,7 +129,7 @@ if __name__ == '__main__':
 
     model.load_weights(model_path)
     if test:
-        testX = utils.load_test_data(data_dir, input_shape, preprocessing=True)
+        testX = utils.load_test_data(data_dir, input_shape, normalize=normalize, preprocessing=True)
         pred = model.predict(testX)
         if ensemble:
             np.save(test, pred)

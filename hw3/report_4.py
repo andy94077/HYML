@@ -73,6 +73,7 @@ if __name__ == '__main__':
     trainX, trainY = utils.load_train_data(data_dir, input_shape, normalize=normalize, preprocessing=True)
     trainX, validX, trainY, validY = utils.train_test_split(trainX, trainY, split_ratio=0.1)
     print(f'\033[32;1mtrainX: {trainX.shape}, trainY: {trainY.shape}, validX: {validX.shape}, validY: {validY.shape}\033[0m')
+    print(validX[0,0,0])
 
     if function not in globals():
         globals()[function] = getattr(importlib.import_module(function[:function.rfind('.')]), function.split('.')[-1])

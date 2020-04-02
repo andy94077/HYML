@@ -69,7 +69,7 @@ if __name__ == '__main__':
     training = not args.no_training
     input_shape = (128, 128)
 
-    trainX, trainY = utils.load_train_data(data_dir, input_shape, preprocessing=True)
+    trainX, trainY = utils.load_train_data(data_dir, input_shape, normalize=False, preprocessing=True)
     trainX, validX, trainY, validY = utils.train_test_split(trainX, trainY, split_ratio=0.1)
     print(f'\033[32;1mtrainX: {trainX.shape}, trainY: {trainY.shape}, validX: {validX.shape}, validY: {validY.shape}\033[0m')
 
@@ -80,7 +80,7 @@ if __name__ == '__main__':
     print('\033[32;1mLoading Model\033[0m')
     model.load_weights(model_path)
     y_pred = np.argmax(model.predict(validX), axis=1)
-    matrix = confusion_matrix(np.argmax(validY, axis=1), y_pred, normalize='all')
+    matrix = confusion_matrix(np.argmax(validY, axis=1), y_pred, normalize='true')
     labels = ['Bread', 'Dairy product', 'Dessert', 'Egg', 'Fried food', 'Meat', 'Noodles/Pasta', 'Rice', 'Seafood', 'Soup', 'Vegetable/Fruit']
     ax = sns.heatmap(matrix, annot=True, fmt='.2f', cmap='nipy_spectral', xticklabels=labels, yticklabels=labels)
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")

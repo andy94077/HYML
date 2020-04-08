@@ -76,7 +76,7 @@ def build_model2(input_shape, output_dim):
     return model
 
 if __name__ == '__main__':
-    os.environ['CUDA_VISIBLE_DEVICES'] = '3' 
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0' 
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     sess = tf.Session(config=config)

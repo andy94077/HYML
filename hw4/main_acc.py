@@ -38,7 +38,7 @@ if __name__ == '__main__':
 
     word2vec_model_path = args.word2vec_model_path
     model_path = args.model_path
-    labeled_path, unlabeled_path = args.training_files
+    labeled_path, unlabeled_path = args.training_files if args.training_files else [None, None]
     training = not args.no_training
     test = args.test
     ensemble = args.ensemble

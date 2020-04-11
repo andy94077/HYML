@@ -1,8 +1,8 @@
 data_dir="$1"
 predicted_file="$2"
 cd model
-if [ -f test.tar.gz ]; tar xzf test.tar.gz; fi
-if [ -f test2.tar.gz ]; tar xzf test2.tar.gz; fi
+if [ -f test.tar.gz ] && ! [ -f test.h5 ]; then tar xzf test.tar.gz; fi
+if [ -f test2.tar.gz ] && ! [-f test2.h5 ]; then tar xzf test2.tar.gz; fi
 cd ..
 python3 main.py "$data_dir" model/test.h5 -eTs "$predicted_file.1.npy"
 python3 main.py "$data_dir" model/test2.h5 -eTs "$predicted_file.2.npy"

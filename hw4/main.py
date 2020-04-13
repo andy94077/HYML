@@ -83,6 +83,18 @@ if __name__ == '__main__':
         #tensorboard = TensorBoard(model_path[:model_path.rfind('.')]+'_logs', histogram_freq=1, batch_size=1024, write_grads=True, write_images=True, update_freq=512)
         model.fit(trainX, trainY, validation_data=(validX, validY), batch_size=256, epochs=10, callbacks=[checkpoint, reduce_lr])
 
+        trainX_no_label = utils.load_train_data(unlabeled_path, word2idx, max_seq_len, label=False)
+        print(f'\033[32;1mtrainX_no_label: {trainX_no_label.shape}\033[0m')
+        threshold = 0.0
+        model.load_weights(model_path)
+        Y = model.predict(trainX_no_label, batch_size=512, verbose=1).ravel()
+        trainX_aug = np.concatenate([trainX, trainX_no_label[(Y >= threshold) | (Y <= 1 - threshold)]], axis=0)
+        trainY_aug = np.concatenate([trainY, np.round(Y[(Y >= threshold) | (Y <= 1 - threshold)])])
+
+        model.fit(trainX_aug, trainY_aug, validation_data=(validX, validY), batch_size=512, epochs=5)
+        print(f'\033[32;1mTraining score: {model.evaluate(trainX, trainY, batch_size=256, verbose=0)}\033[0m')
+        print(f'\033[32;1mValidaiton score: {model.evaluate(validX, validY, batch_size=256, verbose=0)}\033[0m')
+        model.save_weights(model_path)
     else:
         print('\033[32;1mLoading Model\033[0m')
 

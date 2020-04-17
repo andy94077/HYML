@@ -51,13 +51,13 @@ if __name__ == "__main__":
     parser.add_argument('test_data')
     args = parser.parse_args()
 
-    trainX, _ = utils.load_train_data(args.train_data_with_label)
-    trainX_no_label = utils.load_train_data(args.train_data_without_label, label=False)
+    trainX, _ = utils.load_train_data(args.train_data_with_label, preprocessing=False)
+    trainX_no_label = utils.load_train_data(args.train_data_without_label, label=False, preprocessing=False)
 
     print("loading testing data ...")
-    testX = utils.load_test_data(args.test_data)
+    testX = utils.load_test_data(args.test_data, preprocessing=False)
 
-    model = Word2Vec(250).fit(trainX + trainX_no_label + testX)
+    model = Word2Vec(300).fit(trainX + trainX_no_label + testX)
     
     print("saving model ...")
     model.save(args.model_path)

@@ -43,6 +43,7 @@ if __name__ == '__main__':
     parser.add_argument('-e', '--ensemble', action='store_true', help='output npy file to ensemble later')
     parser.add_argument('-lr', type=float, default=1e-3, help='learning rate')
     parser.add_argument('-g', '--gpu', type=str, default='3')
+    parser.add_argument('--semi', action='store_true')
     args = parser.parse_args()
 
     word2vec_model_path = args.word2vec_model_path
@@ -53,6 +54,7 @@ if __name__ == '__main__':
     ensemble = args.ensemble
     function = args.model_function
     lr = args.lr
+    semi = args.semi
 
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
     config = tf.ConfigProto()
@@ -79,22 +81,23 @@ if __name__ == '__main__':
         print(f'\033[32;1mtrainX: {trainX.shape}, validX: {validX.shape}, trainY: {trainY.shape}, validY: {validY.shape}\033[0m')
         checkpoint = ModelCheckpoint(model_path, 'val_loss', verbose=1, save_best_only=True, save_weights_only=True)
         reduce_lr = ReduceLROnPlateau('val_loss', 0.8, 2, verbose=1, min_lr=1e-5)
-        #logger = CSVLogger(model_path+'.csv', append=True)
+        logger = CSVLogger(model_path+'.csv', append=True)
         #tensorboard = TensorBoard(model_path[:model_path.rfind('.')]+'_logs', histogram_freq=1, batch_size=1024, write_grads=True, write_images=True, update_freq=512)
-        model.fit(trainX, trainY, validation_data=(validX, validY), batch_size=256, epochs=10, callbacks=[checkpoint, reduce_lr])
+        model.fit(trainX, trainY, validation_data=(validX, validY), batch_size=256, epochs=10, callbacks=[checkpoint, reduce_lr, logger])
 
-        trainX_no_label = utils.load_train_data(unlabeled_path, word2idx, max_seq_len, label=False)
-        print(f'\033[32;1mtrainX_no_label: {trainX_no_label.shape}\033[0m')
-        threshold = 0.0
-        model.load_weights(model_path)
-        Y = model.predict(trainX_no_label, batch_size=512, verbose=1).ravel()
-        trainX_aug = np.concatenate([trainX, trainX_no_label[(Y >= threshold) | (Y <= 1 - threshold)]], axis=0)
-        trainY_aug = np.concatenate([trainY, np.round(Y[(Y >= threshold) | (Y <= 1 - threshold)])])
+        if semi:
+            trainX_no_label = utils.load_train_data(unlabeled_path, word2idx, max_seq_len, label=False)
+            print(f'\033[32;1mtrainX_no_label: {trainX_no_label.shape}\033[0m')
+            threshold = 0.0
+            model.load_weights(model_path)
+            Y = model.predict(trainX_no_label, batch_size=512, verbose=1).ravel()
+            trainX_aug = np.concatenate([trainX, trainX_no_label[(Y >= threshold) | (Y <= 1 - threshold)]], axis=0)
+            trainY_aug = np.concatenate([trainY, np.round(Y[(Y >= threshold) | (Y <= 1 - threshold)])])
 
-        model.fit(trainX_aug, trainY_aug, validation_data=(validX, validY), batch_size=512, epochs=5)
-        print(f'\033[32;1mTraining score: {model.evaluate(trainX, trainY, batch_size=256, verbose=0)}\033[0m')
-        print(f'\033[32;1mValidaiton score: {model.evaluate(validX, validY, batch_size=256, verbose=0)}\033[0m')
-        model.save_weights(model_path)
+            model.fit(trainX_aug, trainY_aug, validation_data=(validX, validY), batch_size=512, epochs=5)
+            print(f'\033[32;1mTraining score: {model.evaluate(trainX, trainY, batch_size=256, verbose=0)}\033[0m')
+            print(f'\033[32;1mValidaiton score: {model.evaluate(validX, validY, batch_size=256, verbose=0)}\033[0m')
+            model.save_weights(model_path)
     else:
         print('\033[32;1mLoading Model\033[0m')
 

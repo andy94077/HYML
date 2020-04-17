@@ -70,9 +70,9 @@ if __name__ == '__main__':
         print(f'\033[32;1mtrainX: {trainX.shape}, validX: {validX.shape}, trainY: {trainY.shape}, validY: {validY.shape}\033[0m')
         checkpoint = ModelCheckpoint(model_path, 'val_acc', verbose=1, save_best_only=True, save_weights_only=True)
         reduce_lr = ReduceLROnPlateau('val_acc', 0.8, 2, verbose=1, min_lr=1e-5)
-        #logger = CSVLogger(model_path+'.csv', append=True)
+        logger = CSVLogger(model_path+'.csv', append=True)
         #tensorboard = TensorBoard(model_path[:model_path.rfind('.')]+'_logs', histogram_freq=1, batch_size=1024, write_grads=True, write_images=True, update_freq=512)
-        model.fit(trainX, trainY, validation_data=(validX, validY), batch_size=256, epochs=10, callbacks=[checkpoint, reduce_lr])
+        model.fit(trainX, trainY, validation_data=(validX, validY), batch_size=256, epochs=10, callbacks=[checkpoint, reduce_lr, logger])
 
     else:
         print('\033[32;1mLoading Model\033[0m')

@@ -102,10 +102,10 @@ def plot_filter_activation(model, X, layer_name_list, filter_idx_list, train_ite
     model.trainable = False
     if not isinstance(train_iter, list):
         train_iter = [train_iter] * len(layer_name_list)
-    for (layer, iter_n) in zip(layer_name_list, train_iter):
+    for (layer_name, iter_n) in zip(layer_name_list, train_iter):
         ## initialization for subplots
         R, C = 1 + len(filter_idx_list), 2 + X.shape[0]
-        fig, axs = plt.subplots(R, C, figsize=(R * 4, C * 4))
+        fig, axs = plt.subplots(R, C, figsize=(C * 4, R * 4))
 
         ## remove the bounding box for the layer name
         for i in range(axs.shape[0]):
@@ -117,7 +117,7 @@ def plot_filter_activation(model, X, layer_name_list, filter_idx_list, train_ite
             axs[0, i + 2].imshow(np.clip(x[...,::-1]** 1.5, 0, 255).astype(np.uint8))  # BGR to RGB
 
         ## get the filter output for each image
-        layer_output = model.get_layer(layer).output
+        layer_output = model.get_layer(layer_name).output
         model2 = Model(model.input, layer_output)
         pred = model2.predict(X)
         pred = normalize(pred)
@@ -125,15 +125,15 @@ def plot_filter_activation(model, X, layer_name_list, filter_idx_list, train_ite
         for i, filter_idx in enumerate(filter_idx_list):
             max_activation_result = get_max_activation_result(model, layer_output, filter_idx, iter_n)
 
-            axs[1 + i, 0].text(0.35, 0.35, f'{layer}\nfilter {filter_idx}', fontsize=24)
+            axs[1 + i, 0].text(0.35, 0.35, f'{layer_name}\nfilter {filter_idx}', fontsize=24)
             axs[1 + i, 1].imshow(max_activation_result[...,::-1])  # BGR to RGB
             for j, y in enumerate(pred):
                 axs[1 + i, 2 + j].imshow(y[:,:, filter_idx][...,::-1])  # BGR to RGB
         
-        fig.suptitle(f'layer "{layer}" filter visualization', fontsize=28)
+        fig.suptitle(f'layer "{layer_name}" filter visualization', fontsize=28)
         fig.tight_layout()
         fig.subplots_adjust(top=0.95)
-        fig.savefig(f'{layer}.jpg', bbox_inches='tight')
+        fig.savefig(f'{layer_name}.jpg', bbox_inches='tight')
     plt.close()
 
 def plot_lime(fig_name, model, X, Y, label_name=None):
@@ -157,7 +157,7 @@ def plot_lime(fig_name, model, X, Y, label_name=None):
     fig.savefig(fig_name, bbox_inches='tight')
     plt.close()
 
-def plot_deep_dream(fig_name, model, X, layer_name_list, filter_idx_list, train_iter=150):
+def plot_deep_dream(fig_name, model, X, layer_name_list, train_iter=150):
     def get_max_activation_result(model, x, layer_output, iter_n):
         loss = K.mean(layer_output)
         grads = K.gradients(loss, model.input)[0]
@@ -168,16 +168,15 @@ def plot_deep_dream(fig_name, model, X, layer_name_list, filter_idx_list, train_
         for t in range(iter_n):
             print(f'{t + 1:0{len(str(iter_n))}}', end='\r')
             loss_value, grads_value = iter_func([max_activation_result])
-            max_activation_result += 1e-2 * grads_value
-            max_activation_result = np.clip(max_activation_result, 0, 255)
+            max_activation_result += 1e-1 * grads_value
 
-        return np.clip(max_activation_result[0], 0, 255).astype(np.uint8)
+        return np.clip(normalize(max_activation_result[0])**1.5*255, 0, 255).astype(np.uint8)
 
     K.set_learning_phase(0)
     model.trainable = False
 
     ## initialization for subplots
-    R, C = 1 + len(layer_name_list) * len(filter_idx_list), 1 + X.shape[0]
+    R, C = 1 + len(layer_name_list), 1 + X.shape[0]
     fig, axs = plt.subplots(R, C, figsize=(C * 4, R * 4))
 
     ## remove the bounding box for the layer name
@@ -190,17 +189,14 @@ def plot_deep_dream(fig_name, model, X, layer_name_list, filter_idx_list, train_
     
     if not isinstance(train_iter, list):
         train_iter = [train_iter] * len(layer_name_list)
-    for i, (layer, iter_n) in enumerate(zip(layer_name_list, train_iter)):
+    for i, (layer_name, iter_n) in enumerate(zip(layer_name_list, train_iter)):
         ## get the filter output for each image
-        layer_output = model.get_layer(layer).output
-        model2 = Model(model.input, layer_output)
-        pred = model2.predict(X)
+        layer_output = model.get_layer(layer_name).output
 
-        for j, filter_idx in enumerate(filter_idx_list):
-            axs[1 + i * len(filter_idx_list) + j, 0].text(0.35, 0.35, f'{layer}\nfilter {filter_idx}', fontsize=24)
-            for k, x in enumerate(X):
-                max_activation_result = get_max_activation_result(model, x, layer_output, iter_n)
-                axs[1 + i * len(filter_idx_list) + j, 1 + k].imshow(max_activation_result[:,:, filter_idx][...,::-1])  # BGR to RGB
+        axs[1 + i, 0].text(0.35, 0.35, layer_name, fontsize=24)
+        for j, x in enumerate(X):
+            max_activation_result = get_max_activation_result(model, x, layer_output, iter_n)
+            axs[1 + i, 1 + j].imshow(max_activation_result[...,::-1])  # BGR to RGB
         
     fig.savefig(fig_name, bbox_inches='tight')
 
@@ -249,4 +245,4 @@ if __name__ == '__main__':
     #             label_name=['Bread', 'Dairy product', 'Dessert', 'Egg', 'Fried food',
     #                         'Meat', 'Noodles/Pasta', 'Rice', 'Seafood', 'Soup', 'Vegetable/Fruit'])
 
-    plot_deep_dream('4.jpg', model, images, ['batch_normalization_2', 'batch_normalization_8'], [0], 100)
+    plot_deep_dream('4.jpg', model, images, ['conv2d_2', 'conv2d_8'], 150)

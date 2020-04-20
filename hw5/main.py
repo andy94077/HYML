@@ -140,9 +140,9 @@ def plot_lime(fig_name, model, X, Y, label_name=None):
     def segmentation(X):
         return slic(X, n_segments=100, compactness=1, sigma=1)
 
-    fig, axs = plt.subplots((X.shape[0] + 4) // 5, 5, figsize=(20, (X.shape[0] + 4) // 5 * 4))
+    fig, axs = plt.subplots((X.shape[0] + 3) // 4, 4, figsize=(16, (X.shape[0] + 4) // 4 * 4))
     for i in range(X.shape[0], axs.shape[0] * axs.shape[1]):
-        axs[i // 5, i % 5].axis('off')
+        axs[i // 4, i % 4].axis('off')
     
     np.random.seed(880301)
     if label_name is None:
@@ -152,51 +152,41 @@ def plot_lime(fig_name, model, X, Y, label_name=None):
         explaination = explainer.explain_instance(image=x, classifier_fn=model.predict_on_batch, segmentation_fn=segmentation)
         lime_img = explaination.get_image_and_mask(label=y, positive_only=False, hide_rest=False, num_features=11, min_weight=0.05)[0]
         
-        axs[i // 5, i % 5].imshow(normalize(lime_img)[...,::-1])
-        axs[i // 5, i % 5].set_title(str(name))
+        axs[i // 4, i % 4].imshow(normalize(lime_img)[...,::-1])
+        axs[i // 4, i % 4].set_title(str(name))
     fig.savefig(fig_name, bbox_inches='tight')
     plt.close()
 
 def plot_deep_dream(fig_name, model, X, layer_name_list, train_iter=150):
-    def get_max_activation_result(model, x, layer_output, iter_n):
-        loss = K.mean(layer_output)
+    def get_max_activation_result(model, x, layer_outputs, iter_n):
+        loss = K.sum([K.mean(lay) for lay in layer_outputs]) + 3e-5 * K.mean(tf.convert_to_tensor([tf.image.total_variation(lay) for lay in layer_outputs]))
         grads = K.gradients(loss, model.input)[0]
-        grads /= (K.sqrt(K.mean(K.square(grads))) + 1e-5)
+        grads /= (K.std(grads) + 1e-8)
         iter_func = K.function([model.input], [loss, grads])
         
         max_activation_result = x.copy()[np.newaxis]
         for t in range(iter_n):
             print(f'{t + 1:0{len(str(iter_n))}}', end='\r')
             loss_value, grads_value = iter_func([max_activation_result])
-            max_activation_result += 1e-1 * grads_value
+            max_activation_result += 0.1 * grads_value
 
-        return np.clip(normalize(max_activation_result[0])**1.5*255, 0, 255).astype(np.uint8)
+        return np.clip(normalize(max_activation_result[0])** 1.5 * 255, 0, 255).astype(np.uint8)
 
     K.set_learning_phase(0)
     model.trainable = False
 
     ## initialization for subplots
-    R, C = 1 + len(layer_name_list), 1 + X.shape[0]
+    R, C = 2, X.shape[0]
     fig, axs = plt.subplots(R, C, figsize=(C * 4, R * 4))
-
-    ## remove the bounding box for the layer name
-    for i in range(axs.shape[0]):
-        axs[i, 0].axis('off')
 
     # show original images and restore gamma correction
     for i, x in enumerate(X):
-        axs[0, i + 1].imshow(np.clip(x[...,::-1]** 1.5, 0, 255).astype(np.uint8))  # BGR to RGB
+        axs[0, i].imshow(np.clip(x[...,::-1]** 1.5, 0, 255).astype(np.uint8))  # BGR to RGB
     
-    if not isinstance(train_iter, list):
-        train_iter = [train_iter] * len(layer_name_list)
-    for i, (layer_name, iter_n) in enumerate(zip(layer_name_list, train_iter)):
-        ## get the filter output for each image
-        layer_output = model.get_layer(layer_name).output
-
-        axs[1 + i, 0].text(0.35, 0.35, layer_name, fontsize=24)
-        for j, x in enumerate(X):
-            max_activation_result = get_max_activation_result(model, x, layer_output, iter_n)
-            axs[1 + i, 1 + j].imshow(max_activation_result[...,::-1])  # BGR to RGB
+    layer_outputs = [model.get_layer(layer_name).output for layer_name in layer_name_list]
+    for j, x in enumerate(X):
+        max_activation_result = get_max_activation_result(model, x, layer_outputs, train_iter)
+        axs[1, j].imshow(max_activation_result[...,::-1])  # BGR to RGB
         
     fig.savefig(fig_name, bbox_inches='tight')
 
@@ -234,15 +224,15 @@ if __name__ == '__main__':
 
     idx = [83, 4218, 4707, 8598]
     images, labels = trainX[idx], trainY[idx]
-    # plot_saliency_map('1.jpg', model, images)
-    # plot_filter_activation(model, images, ['conv2d_2'], list(range(5)))
+    plot_saliency_map('1.jpg', model, images)
+    plot_filter_activation(model, images, ['conv2d_2'], list(range(5)))
 
-    # idx = [[] for _ in range(trainY.shape[1])]
-    # for i, ii in enumerate(np.argmax(trainY, axis=1)):
-    #     idx[ii].append(i)
-    # idx2 = [idx[0][3], idx[1][5], idx[2][3], idx[3][3], idx[4][3], idx[5][2], idx[6][2], idx[7][2], idx[8][2], idx[9][3], idx[10][3]]
-    # plot_lime('3.jpg', model, trainX[idx2], range(len(idx2)),
-    #             label_name=['Bread', 'Dairy product', 'Dessert', 'Egg', 'Fried food',
-    #                         'Meat', 'Noodles/Pasta', 'Rice', 'Seafood', 'Soup', 'Vegetable/Fruit'])
+    idx2 = [[] for _ in range(trainY.shape[1])]
+    for i, ii in enumerate(np.argmax(trainY, axis=1)):
+        idx2[ii].append(i)
+    idx2 = [idx2[0][3], idx2[1][5], idx2[2][3], idx2[3][3], idx2[4][3], idx2[5][2], idx2[6][2], idx2[7][2], idx2[8][2], idx2[9][3], idx2[10][3]]
+    plot_lime('3.jpg', model, trainX[idx2], range(len(idx2)),
+                label_name=['Bread', 'Dairy product', 'Dessert', 'Egg', 'Fried food',
+                            'Meat', 'Noodles/Pasta', 'Rice', 'Seafood', 'Soup', 'Vegetable/Fruit'])
 
-    plot_deep_dream('4.jpg', model, images, ['conv2d_2', 'conv2d_8'], 150)
+    plot_deep_dream('4.jpg', model, images, ['conv2d_7', 'conv2d_9'], 150)

@@ -195,12 +195,14 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('data_dir')
     parser.add_argument('model_path')
+    parser.add_argument('-o', '--output-dir', default='.')
     parser.add_argument('-f', '--model-function', default='build_model')
     parser.add_argument('-g', '--gpu', default='5')
     args = parser.parse_args()
 
     data_dir = args.data_dir
     model_path = args.model_path
+    output_dir = args.output_dir
     function = args.model_function
     input_shape = (128, 128)
 
@@ -222,6 +224,7 @@ if __name__ == '__main__':
     print('\033[32;1mLoading Model\033[0m')
     model.load_weights(model_path)
 
+    os.chdir(output_dir)
     idx = [83, 4218, 4707, 8598]
     images, labels = trainX[idx], trainY[idx]
     plot_saliency_map('1.jpg', model, images)
@@ -235,4 +238,4 @@ if __name__ == '__main__':
                 label_name=['Bread', 'Dairy product', 'Dessert', 'Egg', 'Fried food',
                             'Meat', 'Noodles/Pasta', 'Rice', 'Seafood', 'Soup', 'Vegetable/Fruit'])
 
-    plot_deep_dream('4.jpg', model, images, ['conv2d_7', 'conv2d_9'], 150)
+    plot_deep_dream('4.jpg', model, images, ['conv2d_7', 'conv2d_9'])

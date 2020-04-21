@@ -159,19 +159,27 @@ def plot_lime(fig_name, model, X, Y, label_name=None):
     plt.close()
 
 def plot_deep_dream(fig_name, model, X, layer_name_list, train_iter=150):
+    def random_roll(x):
+        # randomly shift the image. shape = (None, H, W, C) or (H, W, C)
+        shift = [np.random.randint(-x.shape[-3], x.shape[-3]), np.random.randint(-x.shape[-2], x.shape[-2])]
+        x_rolled = np.roll(x, shift, axis=(-3, -2))
+        return x_rolled, np.array(shift)
+    
     def get_max_activation_result(model, x, layer_outputs, iter_n):
         loss = K.sum([K.mean(lay) for lay in layer_outputs]) + 3e-5 * K.mean(tf.convert_to_tensor([tf.image.total_variation(lay) for lay in layer_outputs]))
         grads = K.gradients(loss, model.input)[0]
         grads /= (K.std(grads) + 1e-8)
-        iter_func = K.function([model.input], [loss, grads])
+        iter_func = K.function([model.input], [grads])
         
         max_activation_result = x.copy()[np.newaxis]
         for t in range(iter_n):
             print(f'{t + 1:0{len(str(iter_n))}}', end='\r')
-            loss_value, grads_value = iter_func([max_activation_result])
+            img_rolled, shift = random_roll(max_activation_result) # roll the image
+            grads_value = iter_func([img_rolled])[0]
+            grads_value = np.roll(grads_value, -shift, axis=(-3, -2)) # roll back
             max_activation_result += 0.05 * grads_value
 
-        return np.clip(max_activation_result[0], 0., 255.**1.5)
+        return np.clip(max_activation_result[0], 0, 255)
 
     K.set_learning_phase(0)
     model.trainable = False
@@ -247,5 +255,5 @@ if __name__ == '__main__':
     plot_lime('3.jpg', model, trainX[idx2], range(len(idx2)),
                 label_name=['Bread', 'Dairy product', 'Dessert', 'Egg', 'Fried food',
                             'Meat', 'Noodles/Pasta', 'Rice', 'Seafood', 'Soup', 'Vegetable/Fruit'])
-
+    
     plot_deep_dream('4.jpg', model, images, ['conv2d_7', 'conv2d_9'], 50)

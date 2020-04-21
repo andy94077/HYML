@@ -129,7 +129,7 @@ def plot_filter_activation(model, X, layer_name_list, filter_idx_list, train_ite
             axs[1 + i, 0].text(0.35, 0.35, f'{layer_name}\nfilter {filter_idx}', fontsize=24)
             axs[1 + i, 1].imshow(max_activation_result[...,::-1])  # BGR to RGB
             for j, y in enumerate(pred):
-                axs[1 + i, 2 + j].imshow(y[:,:, filter_idx][...,::-1])  # BGR to RGB
+                axs[1 + i, 2 + j].imshow(y[:,:, filter_idx])
         
         fig.suptitle(f'layer "{layer_name}" filter visualization', fontsize=28)
         fig.tight_layout()
@@ -246,7 +246,7 @@ if __name__ == '__main__':
     idx = [83, 4218, 4707, 8598]
     images, labels = trainX[idx], trainY[idx]
     plot_saliency_map('1.jpg', model, images)
-    plot_filter_activation(model, images, ['conv2d_2'], list(range(5)))
+    plot_filter_activation(model, images, ['conv2d_2'], [0, 19, 36, 43, 54])
 
     idx2 = [[] for _ in range(trainY.shape[1])]
     for i, ii in enumerate(np.argmax(trainY, axis=1)):

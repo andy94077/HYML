@@ -15,6 +15,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from skimage.segmentation import slic
 from lime import lime_image
+import cv2
 
 import utils
 
@@ -168,9 +169,9 @@ def plot_deep_dream(fig_name, model, X, layer_name_list, train_iter=150):
         for t in range(iter_n):
             print(f'{t + 1:0{len(str(iter_n))}}', end='\r')
             loss_value, grads_value = iter_func([max_activation_result])
-            max_activation_result += 0.1 * grads_value
+            max_activation_result += 0.05 * grads_value
 
-        return np.clip(normalize(max_activation_result[0])** 1.5 * 255, 0, 255).astype(np.uint8)
+        return np.clip(max_activation_result[0], 0., 255.**1.5)
 
     K.set_learning_phase(0)
     model.trainable = False
@@ -185,7 +186,16 @@ def plot_deep_dream(fig_name, model, X, layer_name_list, train_iter=150):
     
     layer_outputs = [model.get_layer(layer_name).output for layer_name in layer_name_list]
     for j, x in enumerate(X):
-        max_activation_result = get_max_activation_result(model, x, layer_outputs, train_iter)
+        max_activation_result = x
+        base_shape = max_activation_result.shape[:-1]
+        ## perform octave scaling
+        for n in range(-2, 3):
+            new_shape = tuple(int(s * (1.3 ** n)) for s in base_shape)
+
+            max_activation_result = cv2.resize(max_activation_result, new_shape)
+            max_activation_result = get_max_activation_result(model, max_activation_result, layer_outputs, train_iter)
+        max_activation_result = np.clip(normalize(max_activation_result)** 1.5 * 255, 0, 255).astype(np.uint8)
+        max_activation_result = cv2.resize(max_activation_result, base_shape)
         axs[1, j].imshow(max_activation_result[...,::-1])  # BGR to RGB
         
     fig.savefig(fig_name, bbox_inches='tight')
@@ -238,4 +248,4 @@ if __name__ == '__main__':
                 label_name=['Bread', 'Dairy product', 'Dessert', 'Egg', 'Fried food',
                             'Meat', 'Noodles/Pasta', 'Rice', 'Seafood', 'Soup', 'Vegetable/Fruit'])
 
-    plot_deep_dream('4.jpg', model, images, ['conv2d_7', 'conv2d_9'])
+    plot_deep_dream('4.jpg', model, images, ['conv2d_7', 'conv2d_9'], 50)

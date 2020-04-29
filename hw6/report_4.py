@@ -26,4 +26,4 @@ if __name__ == '__main__':
 		os.makedirs(output_dir2)
 
 	for name in os.listdir(output_dir):
-		Image.open(os.path.join(output_dir, name)).filter(ImageFilter.GaussianBlur(1)).save(os.path.join(output_dir2, name))
+		Image.open(os.path.join(output_dir, name)).filter(ImageFilter.GaussianBlur(2)).save(os.path.join(output_dir2, name))

@@ -64,7 +64,7 @@ def plot_saliency_map(fig_name, model, X):
         grad_tensor = K.gradients(model.output[:, Y[i]], model.input)[0]
         get_grad = K.function([model.input], [grad_tensor])
 
-        grad = np.abs(get_grad([[x]])[0][0])
+        grad = np.abs(get_grad([x[np.newaxis]])[0][0])
         saliency_map.append(normalize(grad))
     saliency_map = np.array(saliency_map)
     saliency_map = np.clip((saliency_map) * 255, 0, 255).astype(np.uint8)
@@ -91,7 +91,7 @@ def plot_filter_activation(model, X, layer_name_list, filter_idx_list, train_ite
         grads /= (K.sqrt(K.mean(K.square(grads))) + 1e-5)
         iter_func = K.function([model.input], [loss, grads])
         
-        max_activation_result = np.random.normal(size=(1,) + model.input.shape[1:]) * 25 + 128  # shape=(1, 128, 128, 3)
+        max_activation_result = np.random.normal(size=(1,) + tuple(model.input.shape[1:])) * 25 + 128  # shape=(1, 128, 128, 3)
         for t in range(iter_n):
             print(f'{t + 1:0{len(str(iter_n))}}', end='\r')
             loss_value, grads_value = iter_func([max_activation_result])
@@ -242,6 +242,7 @@ if __name__ == '__main__':
     print('\033[32;1mLoading Model\033[0m')
     model.load_weights(model_path)
 
+    os.makedirs(output_dir, exist_ok=True)
     os.chdir(output_dir)
     idx = [83, 4218, 4707, 8598]
     images, labels = trainX[idx], trainY[idx]
@@ -257,3 +258,4 @@ if __name__ == '__main__':
                             'Meat', 'Noodles/Pasta', 'Rice', 'Seafood', 'Soup', 'Vegetable/Fruit'])
     
     plot_deep_dream('4.jpg', model, images, ['conv2d_7', 'conv2d_9'], 50)
+

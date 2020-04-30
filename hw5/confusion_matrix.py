@@ -77,6 +77,7 @@ if __name__ == '__main__':
     model_path = args.model_path
     training = not args.no_training
     output_dir = args.output_dir
+    os.makedirs(output_dir, exist_ok=True)
     input_shape = (128, 128)
 
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu

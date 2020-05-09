@@ -3,6 +3,7 @@ data/
 data
 model/
 model
+hw9/output
 *.csv
 *.npy
 *.jpg

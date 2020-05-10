@@ -14,7 +14,7 @@ def predict(encoder, kmeans_model, X, invert=False):
     return 1 - Y if invert else Y
 
 def evaluate(encoder, kmeans_model, X, Y):
-    Y_pred = predict(encoder, kmeans_model, X)
+    Y_pred = predict(encoder, kmeans_model, X)[-Y.shape[0]:]
     return np.max(np.mean([Y_pred == Y, (1 - Y_pred) == Y], axis=1))
 
 if __name__ == '__main__':
@@ -82,7 +82,9 @@ if __name__ == '__main__':
             utils.generate_csv(pred, test[1])
     else:
         if not training:
+            trainX = utils.load_data(trainX_path, normalize=True, preprocessing=False)
             validX, validY = utils.load_data(validX_path, validY_path, normalize=True, preprocessing=False)
-            print(f'\033[32;1mvalidX: {validX.shape}, validY: {validY.shape}\033[0m')
-        print(f'\033[32;1mValidaiton score: {evaluate(encoder, model, validX, validY)}\033[0m')
+            print(f'\033[32;1mtrainX: {trainX.shape}, validX: {validX.shape}, validY: {validY.shape}\033[0m')
+        X = np.concatenate([trainX, validX], axis=0)
+        print(f'\033[32;1mValidaiton score: {evaluate(encoder, model, X, validY)}\033[0m')
         

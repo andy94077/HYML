@@ -124,7 +124,7 @@ if __name__ == '__main__':
     if function not in globals():
         globals()[function] = getattr(importlib.import_module(function[:function.rfind('.')]), function.split('.')[-1])
     encoder, _, model = globals()[function](input_shape + (3,))  # ignore the decoder model
-    model.compile(SGD(1e-3, momentum=0.9, decay=5e-4), loss='mse')
+    model.compile(Adam(1e-3, decay=5e-4), loss='mse')#SGD(1e-3, momentum=0.9, decay=5e-4), loss='mse')
     model.summary()
 
     if training:
@@ -134,7 +134,7 @@ if __name__ == '__main__':
         else:
             trainX, validX = train_test_split(trainX, test_size=0.1, random_state=880301)
         print(f'\033[32;1mtrainX: {trainX.shape}, validX: {validX.shape}\033[0m')
-        train_gen = ImageDataGenerator(rotation_range=15, width_shift_range=0.125, height_shift_range=0.125, horizontal_flip=True, vertical_flip=True, zoom_range=0.2)
+        train_gen = ImageDataGenerator(rotation_range=15, width_shift_range=0.1, height_shift_range=0.1, horizontal_flip=True, zoom_range=0.1)
 
         batch_size = 256
         checkpoint = ModelCheckpoint(model_path, 'val_loss', verbose=1, save_best_only=True, save_weights_only=True)

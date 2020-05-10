@@ -1,5 +1,6 @@
 from sklearn.cluster import KMeans
 from sklearn.decomposition import KernelPCA
+#from sklearn.manifold import TSNE
 from MulticoreTSNE import MulticoreTSNE as TSNE
 
 class Clustering():
@@ -19,5 +20,5 @@ class Clustering():
 	def predict(self, X):
 		if self.dimension_reduction:
 			X = self.pca.transform(X)
-			X = TSNE(n_components=2, n_jobs=-1, random_state=880301).fit_transform(X)
+			X = TSNE(n_components=2, n_jobs=-1, verbose=1).fit_transform(X)
 		return self.kmeans.predict(X)

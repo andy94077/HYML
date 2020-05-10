@@ -21,7 +21,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('kmeans_model_path')
     parser.add_argument('autoencoder_model_path')
-    parser.add_argument('-t', '--training-files', nargs=3, help='training file, validation data and validation labels')
+    parser.add_argument('-t', '--training-file', help='training data')
+    parser.add_argument('-v', '--validation-file', nargs=2, help='validation data and validation labels')
     parser.add_argument('-f', '--model-function', default='build_autoencoder', help='build function of the autoencoder')
     parser.add_argument('-T', '--no-training', action='store_true')
     parser.add_argument('-s', '--test', nargs=2, type=str, help='predicted file')
@@ -38,7 +39,8 @@ if __name__ == '__main__':
 
     model_path = args.kmeans_model_path
     autoencoder_path = args.autoencoder_model_path
-    trainX_path, validX_path, validY_path = args.training_files if args.training_files else [None] * 3
+    trainX_path = args.training_file
+    validX_path, validY_path = args.validation_file if args.validation_file else [None, None]
     function = args.model_function
     training = not args.no_training
     test = args.test
@@ -54,12 +56,16 @@ if __name__ == '__main__':
 
     if training:
         trainX = utils.load_data(trainX_path, normalize=True, preprocessing=False)
-        validX, validY = utils.load_data(validX_path, validY_path, normalize=True, preprocessing=False)
-        print(f'\033[32;1mtrainX: {trainX.shape}, validX: {validX.shape}, validY: {validY.shape}\033[0m')
+        if validX_path is not None and validY_path is not None:
+            validX, validY = utils.load_data(validX_path, validY_path, normalize=True, preprocessing=False)
+            print(f'\033[32;1mtrainX: {trainX.shape}, validX: {validX.shape}, validY: {validY.shape}\033[0m')
+        else:
+            print(f'\033[32;1mtrainX: {trainX.shape}\033[0m')
 
-        latent_trainX = encoder.predict(trainX, batch_size=256).reshape(trainX.shape[0], -1)
-        latent_validX = encoder.predict(validX, batch_size=256).reshape(validX.shape[0], -1)
-        latents = np.concatenate([latent_trainX, latent_validX], axis=0)
+        latents = encoder.predict(trainX, batch_size=256).reshape(trainX.shape[0], -1)
+        if validX_path is not None and validY_path is not None:
+            latent_validX = encoder.predict(validX, batch_size=256).reshape(validX.shape[0], -1)
+            latents = np.concatenate([latents, latent_validX], axis=0)
         model = KMeans(2, n_jobs=-1).fit(latents)
 
         utils.save_model(model_path, model)

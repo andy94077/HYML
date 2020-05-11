@@ -134,14 +134,15 @@ if __name__ == '__main__':
         else:
             trainX, validX = train_test_split(trainX, test_size=0.1, random_state=880301)
         print(f'\033[32;1mtrainX: {trainX.shape}, validX: {validX.shape}\033[0m')
-        train_gen = ImageDataGenerator(rotation_range=15, width_shift_range=0.1, height_shift_range=0.1, horizontal_flip=True, zoom_range=0.1)
+        # train_gen = ImageDataGenerator(rotation_range=15, width_shift_range=0.1, height_shift_range=0.1, horizontal_flip=True, zoom_range=0.1)
 
         batch_size = 256
-        checkpoint = ModelCheckpoint(model_path, 'val_loss', verbose=1, save_best_only=True, save_weights_only=True)
-        reduce_lr = ReduceLROnPlateau('val_loss', 0.8, 5, verbose=1, min_lr=1e-5)
+        checkpoint = ModelCheckpoint(model_path, 'loss', verbose=1, save_best_only=True, save_weights_only=True)
+        reduce_lr = ReduceLROnPlateau('loss', 0.8, 5, verbose=1, min_lr=1e-5)
         #logger = CSVLogger(model_path+'.csv')
         #tensorboard = TensorBoard(model_path[:model_path.rfind('.')]+'_logs', histogram_freq=1, batch_size=1024, write_grads=True, update_freq='epoch')
-        model.fit_generator(train_gen.flow(trainX, trainX, batch_size=batch_size), steps_per_epoch=trainX.shape[0]/batch_size, epochs=50, validation_data=(validX, validX), verbose=1, callbacks=[checkpoint, reduce_lr])
+        # model.fit_generator(train_gen.flow(trainX, trainX, batch_size=batch_size), steps_per_epoch=trainX.shape[0]/batch_size, epochs=50, validation_data=(validX, validX), verbose=1, callbacks=[checkpoint, reduce_lr])
+        model.fit(trainX, trainX, batch_size=batch_size, epochs=50, validation_data=(validX, validX), verbose=1, callbacks=[checkpoint, reduce_lr])
     else:
         print('\033[32;1mLoading Model\033[0m')
 

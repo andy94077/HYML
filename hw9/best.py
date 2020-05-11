@@ -67,7 +67,7 @@ if __name__ == '__main__':
         if validX_path is not None and validY_path is not None:
             latent_validX = encoder.predict(validX, batch_size=256).reshape(validX.shape[0], -1)
             latents = np.concatenate([latents, latent_validX], axis=0)
-        model = Clustering(dimension_reduction=True).fit(latents)
+        model = Clustering().fit(latents)
 
         utils.save_model(model_path, model)
     else:

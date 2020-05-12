@@ -34,3 +34,48 @@ class Clustering():
 		X = self.pca2.transform(X)
 		X = TSNE(n_components=2, n_jobs=-1, random_state=self.seed).fit_transform(X)
 		return self.kmeans.predict(X)
+
+class GeneralClustering():
+	def __init__(self, transforms):
+		self.transforms = transforms
+	
+	def fit(self, X):
+		for trsfm in self.transforms:
+			print(f'fitting {type(trsfm)}...')
+			X = trsfm.fit_transform(X)
+		return self
+
+	def fit_predict(self, X):
+		for trsfm in self.transforms[:-1]:
+			print(f'fitting {type(trsfm)}...')
+			X = trsfm.fit_transform(X)
+		
+		print(f'fitting {type(self.transforms[-1])}...')
+		out = self.transforms[-1].fit_predict(X)
+		return self, out
+
+	def predict(self, X):
+		for trsfm in self.transforms[:-1]:
+			if isinstance(trsfm, TSNE):
+				X = trsfm.fit_transform(X)
+			else:
+				X = trsfm.transform(X)
+		out = self.transforms[-1].predict(X)
+		return out
+
+	def fit_transform(self, X):
+		# does not contain last transform
+		for trsfm in self.transforms[:-1]:
+			print(f'fitting {type(trsfm)}...')
+			X = trsfm.fit_transform(X)
+		return self, X
+
+	def transform(self, X):
+		# does not contain last transform
+		for trsfm in self.transforms[:-1]:
+			if isinstance(trsfm, TSNE):
+				X = trsfm.fit_transform(X)
+			else:
+				X = trsfm.transform(X)
+		return self, X
+

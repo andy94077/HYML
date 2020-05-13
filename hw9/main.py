@@ -13,8 +13,8 @@ def predict(clf, latents, invert=False):
     return 1 - Y if invert else Y
 
 def baseline_transform():
-    return [KernelPCA(n_components=200, kernel='rbf', n_jobs=-1), 
-            TSNE(n_components=2, n_jobs=-1), 
+    return [KernelPCA(n_components=200, kernel='rbf', n_jobs=-1, random_state=0), 
+            TSNE(n_components=2, n_jobs=-1, random_state=0), 
             MiniBatchKMeans(n_clusters=2, random_state=0)
     ]
 
@@ -23,7 +23,7 @@ def improved_transform():
     seed = int(1e9) + 7
     return [KernelPCA(1024, 'rbf', n_jobs=-1, random_state=seed),
             KernelPCA(64, 'rbf', n_jobs=-1, random_state=seed),
-	    TSNE(n_components=2, n_jobs=-1, random_state=seed),
+            TSNE(n_components=2, n_jobs=-1, random_state=seed),
             KMeans(n_clusters=2, n_jobs=-1, random_state=seed)
     ]
 
@@ -31,14 +31,28 @@ def improved_transform2():
     seed = int(1e9) + 7
     return [KernelPCA(1024, 'rbf', n_jobs=-1, random_state=seed),
             PCA(64, whiten=True, random_state=seed),
-	    TSNE(n_components=2, n_jobs=-1, random_state=seed),
+            TSNE(n_components=2, n_jobs=-1, random_state=seed),
             KMeans(n_clusters=2, n_jobs=-1, random_state=seed)
     ]
 
 def improved_transform3():
     seed = int(1e9) + 7
     return [KernelPCA(64, 'rbf', n_jobs=-1, random_state=seed),
-	    TSNE(n_components=2, n_jobs=-1, random_state=seed),
+            TSNE(n_components=2, n_jobs=-1, random_state=seed),
+            KMeans(n_clusters=2, n_jobs=-1, random_state=seed)
+    ]
+
+def improved_transform4():
+    seed = int(1e9) + 7
+    return [PCA(64, whiten=True, random_state=seed),
+            TSNE(n_components=2, n_jobs=-1, random_state=seed),
+            KMeans(n_clusters=2, n_jobs=-1, random_state=seed)
+    ]
+
+def improved_transform5():
+    seed = int(1e9) + 7
+    return [PCA(16, whiten=True, random_state=seed),
+            TSNE(n_components=2, n_jobs=-1, random_state=seed),
             KMeans(n_clusters=2, n_jobs=-1, random_state=seed)
     ]
 

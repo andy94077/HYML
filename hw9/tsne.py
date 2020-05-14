@@ -1,6 +1,8 @@
 import os, argparse
 import numpy as np
 from MulticoreTSNE import MulticoreTSNE as TSNE
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 

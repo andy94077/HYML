@@ -12,45 +12,40 @@ def predict(clf, latents, invert=False):
     Y = clf.predict(latents)
     return 1 - Y if invert else Y
 
-def baseline_transform():
+def baseline_transform(seed):
     return [KernelPCA(n_components=200, kernel='rbf', n_jobs=-1, random_state=0), 
             TSNE(n_components=2, n_jobs=-1, random_state=0), 
             MiniBatchKMeans(n_clusters=2, random_state=0)
     ]
 
 
-def improved_transform():
-    seed = int(1e9) + 7
+def improved_transform(seed=int(1e9) + 7):
     return [KernelPCA(1024, 'rbf', n_jobs=-1, random_state=seed),
             KernelPCA(64, 'rbf', n_jobs=-1, random_state=seed),
             TSNE(n_components=2, n_jobs=-1, random_state=seed),
             KMeans(n_clusters=2, n_jobs=-1, random_state=seed)
     ]
 
-def improved_transform2():
-    seed = int(1e9) + 7
+def improved_transform2(seed=int(1e9) + 7):
     return [KernelPCA(1024, 'rbf', n_jobs=-1, random_state=seed),
             PCA(64, whiten=True, random_state=seed),
             TSNE(n_components=2, n_jobs=-1, random_state=seed),
             KMeans(n_clusters=2, n_jobs=-1, random_state=seed)
     ]
 
-def improved_transform3():
-    seed = int(1e9) + 7
+def improved_transform3(seed=int(1e9) + 7):
     return [KernelPCA(64, 'rbf', n_jobs=-1, random_state=seed),
             TSNE(n_components=2, n_jobs=-1, random_state=seed),
             KMeans(n_clusters=2, n_jobs=-1, random_state=seed)
     ]
 
-def improved_transform4():
-    seed = int(1e9) + 7
-    return [PCA(64, whiten=True, random_state=seed),
+def improved_transform4(seed=int(1e9) + 7):
+    return [PCA(64, whiten=True, random_state=seed),#, svd_solver='full'),
             TSNE(n_components=2, n_jobs=-1, random_state=seed),
             KMeans(n_clusters=2, n_jobs=-1, random_state=seed)
     ]
 
-def improved_transform5():
-    seed = int(1e9) + 7
+def improved_transform5(seed=int(1e9) + 7):
     return [PCA(16, whiten=True, random_state=seed),
             TSNE(n_components=2, n_jobs=-1, random_state=seed),
             KMeans(n_clusters=2, n_jobs=-1, random_state=seed)
@@ -66,6 +61,7 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--test', type=str, help='predicted file')
     parser.add_argument('-e', '--ensemble', action='store_true', help='output npy file to ensemble later')
     parser.add_argument('-i', '--invert', action='store_true')
+    parser.add_argument('--seed', type=int, default=int(1e9) + 7)
     args = parser.parse_args()
 
     model_path = args.clustering_model_path
@@ -75,23 +71,26 @@ if __name__ == '__main__':
     training = not args.no_training
     test = args.test
     ensemble = args.ensemble
-    invert = args.invert
+    invert=args.invert
+    seed = args.seed
     input_shape = (32, 32)
 
     latents = np.concatenate([np.load(path) for path in latents_path], axis=0)
     latents = latents.reshape(latents.shape[0], -1)
+    print(f'\033[32;1mlatents: {latents.shape}\033[0m')
+    np.random.seed(880301)
     if training:
-        print(f'\033[32;1mlatents: {latents.shape}\033[0m')
-
         if transform_function not in globals():
             globals()[transform_function] = getattr(importlib.import_module(transform_function[:transform_function.rfind('.')]), transform_function.split('.')[-1])
-        model, pred = GeneralClustering(globals()[transform_function]()).fit_predict(latents)
+        model, pred = GeneralClustering(globals()[transform_function](seed)).fit_predict(latents)
+        print('PCA components_:', model.transforms[0].components_[0,:10])
 
         utils.save_model(model_path, model)
     else:
         print('\033[32;1mLoading Model\033[0m')
-        model = utils.load_model(model_path)
 
+    model = utils.load_model(model_path)
+    print('PCA components_ after loaded:', model.transforms[0].components_[0,:10])
     if test:
         if not training:
             pred = predict(model, latents, invert=invert)

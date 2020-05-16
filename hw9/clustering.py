@@ -49,6 +49,7 @@ class GeneralClustering():
 		for trsfm in self.transforms[:-1]:
 			print(f'fitting {type(trsfm)}...')
 			X = trsfm.fit_transform(X)
+			print(X[0, :10])
 		
 		print(f'fitting {type(self.transforms[-1])}...')
 		out = self.transforms[-1].fit_predict(X)
@@ -56,10 +57,13 @@ class GeneralClustering():
 
 	def predict(self, X):
 		for trsfm in self.transforms[:-1]:
+			print(f'predicting {type(trsfm)}...')
 			if isinstance(trsfm, TSNE):
 				X = trsfm.fit_transform(X)
 			else:
 				X = trsfm.transform(X)
+			print(X[0, :10])
+		print(f'predicting {type(self.transforms[-1])}...')
 		out = self.transforms[-1].predict(X)
 		return out
 

@@ -51,7 +51,7 @@ def bleu_score(sentences, targets):
                 tmp.extend([word for word in token])
         return tmp
 
-    score = np.sum([sentence_bleu([cut_token(target)], cut_token(sentence), weights=(1, 0, 0, 0))
+    score = np.mean([sentence_bleu([cut_token(target)], cut_token(sentence), weights=(1, 0, 0, 0))
                     for sentence, target in zip(sentences, targets)])
     return score
 

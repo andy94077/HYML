@@ -15,23 +15,25 @@ def get_idx2word(path):
         idx2word = json.load(f)
     return {int(k): w for k, w in idx2word.items()}
     
-def seq2sent(sequence, idx2word):
-    '''Return sentence converted from sequence with the idx2word mapping.
+def seq2sent(sequences, idx2word):
+    '''Return sentences converted from sequences with the idx2word mapping.
 
-    It will truncate the sentence after it meets '<EOS>'.
+    It will truncate the sentences after it meets '<EOS>'.
 
     Args:
-        sequences: A sequence. i.e. [i_0, i_1, ..., i_n, i('<EOS>'), i('<PAD>'), ...].
+        sequences: A list of sequence. i.e. [[i_0, i_1, ..., i_n, i('<EOS>'), i('<PAD>'), ...], ...].
         idx2word: A dict with indexs as key and words as values.
     '''
-    sentence = []
-    for i in sequence:
-        word = idx2word[i]
-        if word == '<EOS>':
-            break
-        sentence.append(word)
-    
-    return sentence
+    sentences = []
+    for sequence in sequences:
+        sentence = []
+        for i in sequence:
+            word = idx2word[i]
+            if word == '<EOS>':
+                break
+            sentence.append(word)
+        sentences.append(sentence)
+    return sentences
 
 def bleu_score(sentences, targets):
     '''Return the BELU@1 score.
@@ -53,33 +55,36 @@ def bleu_score(sentences, targets):
                     for sentence, target in zip(sentences, targets)])
     return score
 
-def data_preprocessing(X, word2idx, max_seq_len, with_BOS=True):
+def data_preprocessing(X, word2idx, max_seq_len, pad='default'):
     '''Convert word to index, and pad `X` to `max_seq_len`.
 
     Args:
         X: A list of lists of words.
         word2idx: A dict with words as keys and indexs as values.
         max_seq_len: The maximum sequence length.
-        with_BOS: Whether the returned array contains <BOS> in the beginning.
-    
+        pad: The sequence length after padded. Default is the same as `max_seq_len`.
     Returns:
         A numpy array with converted and padded sequences.
     '''
-    X = [([word2idx['<BOS>']] if with_BOS else []) + [word2idx.get(w, word2idx['<UNK>']) for w in text] + [word2idx['<EOS>']] for text in X]
-    return pad_sequences(X, max_seq_len, padding='post', truncating='post', value=word2idx['<PAD>'])
+    X = [[word2idx['<BOS>']] + [word2idx.get(w, word2idx['<UNK>']) for w in text[:max_seq_len - 2]] + [word2idx['<EOS>']] for text in X]
+    return pad_sequences(X, max_seq_len if pad == 'default' else pad, padding='post', truncating='post', value=word2idx['<PAD>'])
 
-def load_data(path, word2idx, max_seq_len, label=True):
+def load_data(path, word2idx_X, max_seq_len, label=True, word2idx_Y=None):
     '''Return preprocessed training data from the file.
 
     Args:
         path: A file path of the corpus.
-        word2idx: A dict with words as keys and indexs as values.
+        word2idx_X: A dict with words as keys and indexs as values for training data.
         max_seq_len: The maximum sequence length.
         label: Whether the file contains labels.
+        word2idx_Y: A dict with words as keys and indexs as values for training target.
+            If None, it will be set as `word2idx_X`.
     
     Returns:
-        If `label` is True, returns (`trainX`, `trainY`, `trainY_raw`), 
-        where `trainX` is the training data sequences, `trainY` is the target data sequences,
+        If `label` is True, returns (`trainX`, `trainY[:, :-1]`, `trainY[:, 1:]`, `trainY_raw`), 
+        where `trainX` is the training data sequences, 
+        `trainY[:, :-1]` is the target data sequences having '<BOS>' in the beginning,
+        `trainY[:, 1:]` is the target data sequences not having '<BOS>' in the beginning,
         and `trainY_raw` is the target data sentences.
 
         Otherwise, returns `trainX`.
@@ -88,12 +93,16 @@ def load_data(path, word2idx, max_seq_len, label=True):
         f_all = [ll.split('\t') for ll in f.readlines()] # [0]=en, [1]=cn
     # split the string to list of words
     trainX = [text_to_word_sequence(ll[0], filters='') for ll in f_all]
-    trainX = data_preprocessing(trainX, word2idx, max_seq_len)
+    trainX = data_preprocessing(trainX, word2idx_X, max_seq_len)
     if label:
+        if word2idx_Y is None:
+            word2idx_Y = word2idx_X
         # split the string to list of words
         trainY_raw = [text_to_word_sequence(ll[1], filters='') for ll in f_all]
-        trainY = data_preprocessing(trainY_raw, word2idx, max_seq_len, with_BOS=False)
-        return trainX, trainY, trainY_raw
+        trainY = data_preprocessing(trainY_raw, word2idx_Y, max_seq_len, pad=max_seq_len + 1)
+        # trainY[:, :-1] has <BOS> in the beginning, trainY[:, 1:] does not have <BOS> in the beginning
+        # Both of trainY[:, :-1] and trainY[:, 1:] has length `max_seq_len`
+        return trainX, trainY[:, :-1], trainY[:, 1:], trainY_raw
     return trainX
         
 def train_test_split(X, Y, split_ratio=0.2, seed=880301):
@@ -111,6 +120,6 @@ def save_model(path, model):
 
 def generate_csv(sequences, idx2word, output_file):
     with open(output_file, 'w') as f:
-        for seq in sequences:
-            print(' '.join(seq2sent(seq, idx2word)), file=f)
+        for sent in seq2sent(sequences, idx2word):
+            print(' '.join(sent), file=f)
 

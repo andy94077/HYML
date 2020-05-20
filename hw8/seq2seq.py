@@ -200,7 +200,8 @@ class Decoder(nn.Module):
         self.n_layers = n_layers
         self.embedding = nn.Embedding(cn_vocab_size, config.emb_dim)
         self.isatt = isatt
-        self.attention = Attention(hid_dim)
+        if isatt:
+            self.attention = Attention(hid_dim)
         # 如果使用 Attention Mechanism 會使得輸入維度變化，請在這裡修改
         # e.g. Attention 接在輸入後面會使得維度變化，所以輸入維度改為
         self.input_dim = emb_dim + hid_dim * 2# if isatt else emb_dim
@@ -222,7 +223,6 @@ class Decoder(nn.Module):
             embedded = torch.cat([embedded, attn], dim=-1)
         else:
             embedded = torch.cat([embedded, encoder_outputs[:, -1:]], dim=-1)
-            # TODO: 在這裡決定如何使用 Attention，e.g. 相加 或是 接在後面， 請注意維度變化
         output, hidden = self.rnn(embedded, hidden)
         # output = [batch size, 1, hid dim]
         # hidden = [num_layers, batch size, hid dim]
@@ -247,23 +247,23 @@ class Attention(nn.Module):
     def __init__(self, hid_dim):
         super(Attention, self).__init__()
         self.hid_dim = hid_dim
-        units = 10
+        units = 128
         self.w1 = nn.Linear(self.hid_dim*2, units, bias=False) # for encoder_outputs
-        self.w2 = nn.Linear(self.hid_dim, units, bias=False)  # for decoder_hidden
+        self.w2 = nn.Linear(self.hid_dim*2, units, bias=False)  # for decoder_hidden
         self.w3 = nn.Linear(units, 1, bias=False)
     
     def forward(self, encoder_outputs, decoder_hidden):
         # encoder_outputs = [batch size, sequence len, hid dim * directions]
-        # decoder_hidden = [num_layers, batch size, hid dim]
+        # decoder_hidden = [num_layers, batch size, hid dim * directions]
         # 一般來說是取 Encoder 最後一層的 hidden state 來做 attention
         encoder_out = self.w1(encoder_outputs)
-        decoder_hid = self.w2(torch.unsqueeze(decoder_hidden[-1], 1))
-        added_tanh = F.tanh(encoder_out + decoder_hid)
+        decoder_hid = self.w2(decoder_hidden[-1].unsqueeze(1))
+        added_tanh = torch.tanh(encoder_out + decoder_hid)
         score = self.w3(added_tanh)
-        alpha = F.softmax(score) # [batch, sequence len, 1]
-        attention = torch.bmm(torch.transpose(encoder_out, 1, 2), alpha)
-        
-        return attention # [batch, 1, hid_dim * directions]
+        alpha = F.softmax(score, dim=1)  # [batch, sequence len, 1]
+        attention = torch.bmm(encoder_outputs.transpose(1, 2), alpha)
+
+        return attention.transpose(1, 2) # [batch, 1, hid_dim * directions]
 
 """## Seq2Seq
 - 由 **Encoder** 和 **Decoder** 組成
@@ -283,8 +283,8 @@ class Seq2Seq(nn.Module):
                         "Encoder and decoder must have equal number of layers!"
                         
     def forward(self, input, target, teacher_forcing_ratio):
-        # input    = [batch size, input len, vocab size]
-        # target = [batch size, target len, vocab size]
+        # input    = [batch size, input len]
+        # target = [batch size, target len]
         # teacher_forcing_ratio 是有多少機率使用正確答案來訓練
         batch_size = target.shape[0]
         target_len = target.shape[1]
@@ -316,20 +316,17 @@ class Seq2Seq(nn.Module):
         preds = torch.cat(preds, 1)
         return outputs, preds
 
-    def inference(self, input, target, beam_search=True):
-        ########
-        # TODO #
-        ########
-        # 在這裡實施 Beam Search
-        # 此函式的 batch size = 1    
-        # input    = [batch size, input len, vocab size]
-        # target = [batch size, target len, vocab size]
+    def inference(self, input, target, beam_search=1):
+        # input    = [batch size, input len]
+        # target = [batch size, target len]
+        # print(f'input shape: {input.shape}')
+        # print(f'target shape: {target.shape}')
         batch_size = input.shape[0]
         input_len = input.shape[1]                # 取得最大字數
         vocab_size = self.decoder.cn_vocab_size
 
         # 準備一個儲存空間來儲存輸出
-        outputs = torch.zeros(batch_size, input_len, vocab_size).to(self.device)
+        outputs = torch.zeros(beam_search, batch_size, input_len, vocab_size).to(self.device)
         # 將輸入放入 Encoder
         encoder_outputs, hidden = self.encoder(input)
         # Encoder 最後的隱藏層(hidden state) 用來初始化 Decoder
@@ -339,18 +336,56 @@ class Seq2Seq(nn.Module):
         hidden = hidden.view(self.encoder.n_layers, 2, batch_size, -1)
         hidden = torch.cat((hidden[:, -2, :, :], hidden[:, -1, :, :]), dim=2)
         # 取的 <BOS> token
-        input = target[:, 0]
-        preds = []
+        decoder_in = target[:, 0] # [batch,]
+        preds = torch.zeros(beam_search, batch_size, input_len).to(self.device)
+        decoder_in_candidate = decoder_in.unsqueeze(0) # [beam_seach, batch]
+        hidden_candidate = hidden.unsqueeze(0) # [beam_search, n_layers, batch, hid_dim]
+        probability = torch.zeros(1, batch_size).to(self.device)  # [beam_search, batch]
         for t in range(1, input_len):
-            output, hidden = self.decoder(input, hidden, encoder_outputs)
-            # 將預測結果存起來
-            outputs[:, t] = output
-            # 取出機率最大的單詞
-            top1 = output.argmax(1)
-            input = top1
-            preds.append(top1.unsqueeze(1))
-        preds = torch.cat(preds, 1)
-        return outputs, preds
+            # print(f'\033[32;1minput {t}:\033[0m')
+            new_outputs, new_decoder_in_candidate, new_hidden_candidate, new_probability = [], [], [], []
+            for can, hid, prob in zip(decoder_in_candidate, hidden_candidate, probability):
+                # can = [batch,], hid = [n_layers, batch, hid_dim], prob = [batch,]
+                # print(f'can shape: {can.shape}')
+                # print(f'prob shape: {prob.shape}')
+                # output = [batch, voacb_size], hidden = [n_layers, batch, hid_dim]
+                output, hidden = self.decoder(can, hid, encoder_outputs)
+                # print(f'output shape: {output.shape}')
+                # print(f'hidden shape: {hidden.shape}')
+                
+                topk = F.log_softmax(output, dim=1).topk(beam_search, dim=1) # [batch, beam_search]
+                new_decoder_in_candidate.append(topk.indices.transpose(0, 1))  # [beam_search, batch]
+                new_hidden_candidate.extend([hidden] * beam_search)
+                new_prob = topk.values.transpose(0, 1)  # [beam_search, batch]
+                # print(f'new_prob shape: {new_prob.shape}')
+                new_probability.append(prob.unsqueeze(0) + new_prob)
+
+                new_outputs.extend([output] * beam_search)
+            
+            new_probability = torch.cat(new_probability, dim=0) # [beam_search ** 2, batch]
+            # print(f'new_probability shape: {new_probability.shape}')
+            new_probability_topk = new_probability.topk(beam_search, dim=0) # [beam_search, batch]
+            probability = new_probability_topk.values # [beam_search, batch]
+
+            new_outputs = torch.stack(new_outputs) # [beam_search ** 2, batch, vocab_size]
+            # print(f'new_outputs shape: {new_outputs.shape}')
+            new_outputs_indices = new_probability_topk.indices.unsqueeze(-1).expand(beam_search, batch_size, vocab_size)
+            outputs[:,:, t] = new_outputs.gather(0, new_outputs_indices)
+
+            new_decoder_in_candidate = torch.cat(new_decoder_in_candidate, dim=0)  # [beam_search ** 2, batch]
+            # print(f'new_decoder_in_candidate shape: {new_decoder_in_candidate.shape}')
+            preds[:, :, t-1] = decoder_in_candidate.gather(0, new_probability_topk.indices // beam_search)
+            decoder_in_candidate = new_decoder_in_candidate.gather(0, new_probability_topk.indices)
+            # print(f'decoder_in_candidate shape: {decoder_in_candidate.shape}')
+
+            new_hidden_candidate = torch.stack(new_hidden_candidate)  # [beam_search ** 2, batch]
+            # print(f'new_hidden_candidate shape: {new_hidden_candidate.shape}')
+            new_hidden_indices = new_probability_topk.indices.view(-1, 1, batch_size, 1).expand(beam_search, *hidden_candidate.shape[1:])
+            hidden_candidate = new_hidden_candidate.gather(0, new_hidden_indices)  # [beam_search, batch]
+            # print(f'hidden_candidate shape: {hidden_candidate.shape}')
+
+        top1 = probability.argmax(0, keepdims=True) # [1, batch]
+        return outputs.gather(0, top1.view(1, -1, 1, 1).expand(1, *outputs.shape[1:]))[0], preds.gather(0, top1.unsqueeze(-1).expand(1, *preds.shape[1:]))[0, :, 1:]
 
 """# utils
 - 基本操作:
@@ -447,8 +482,16 @@ def infinite_iter(data_loader):
 
 """## schedule_sampling"""
 
-def schedule_sampling(step, teacher_forcing_ratio):
-    return teacher_forcing_ratio
+def schedule_sampling(step, teacher_forcing_ratio, mode='const'):
+    if mode == 'const':
+        return teacher_forcing_ratio
+    if mode == 'linear':
+        return max(1. - teacher_forcing_ratio * step, 0.)
+    if mode == 'exponential':
+        return pow(teacher_forcing_ratio, step)
+    if mode == 'inverse':
+        return teacher_forcing_ratio / (teacher_forcing_ratio + np.exp(step / teacher_forcing_ratio))
+    raise KeyError(f'Invalid mode {mode}')
 
 """# 訓練步驟
 
@@ -496,6 +539,7 @@ def test(model, dataloader, loss_function, beam_search):
         sources, targets = sources.to(device), targets.to(device)
         batch_size = sources.size(0)
         outputs, preds = model.inference(sources, targets, beam_search)
+        # exit()
         # targets 的第一個 token 是 <BOS> 所以忽略
         outputs = outputs[:, 1:].reshape(-1, outputs.size(2))
         targets = targets[:, 1:].reshape(-1)
@@ -513,7 +557,7 @@ def test(model, dataloader, loss_function, beam_search):
         # 計算 Bleu Score
         bleu_score += computebleu(preds, targets)
 
-    return loss_sum / len(dataloader), bleu_score / len(dataloader), result
+    return loss_sum / len(dataloader), bleu_score / len(dataloader.dataset), result
 
 """## 訓練流程
 - 先訓練，再檢驗
@@ -526,11 +570,12 @@ def train_process(config):
     train_iter = infinite_iter(train_loader)
     # 準備檢驗資料
     val_dataset = EN2CNDataset(config.data_path, config.max_output_len, 'validation')
-    val_loader = data.DataLoader(val_dataset, batch_size=1)
+    val_loader = data.DataLoader(val_dataset, batch_size=config.batch_size)
     # 建構模型
     model, optimizer = build_model(config, train_dataset.en_vocab_size, train_dataset.cn_vocab_size)
     loss_function = nn.CrossEntropyLoss(ignore_index=0)
 
+    best_val_loss, best_bleu_score = np.inf, 0
     train_losses, val_losses, bleu_scores = [], [], []
     total_steps = 0
     while total_steps < config.num_steps:
@@ -546,20 +591,25 @@ def train_process(config):
         print (f'val [{total_steps}/{config.num_steps}] loss: {val_loss:.3f}, Perplexity: {np.exp(val_loss):.3f}, blue score: {bleu_score:.3f}')
         
         # 儲存模型和結果
-        if total_steps % config.store_steps == 0 or total_steps >= config.num_steps:
+        if bleu_score > best_bleu_score and (total_steps % config.store_steps == 0 or total_steps >= config.num_steps):
+            print(f'bleu_score improved from {best_bleu_score:.3f} to {bleu_score:.3f}. Save model to {config.store_model_path}...')
+            best_bleu_score = bleu_score
             save_model(model, optimizer, config.store_model_path, total_steps)
-            with open(f'{config.store_model_path}/output_{total_steps}.txt', 'w') as f:
+            with open(os.path.join(config.store_model_path, f'output_{total_steps}.txt'), 'w') as f:
                 for line in result:
-                    print (line, file=f)
+                    print(line, file=f)
+        else:
+            print(f'bleu_score does not improve from {best_bleu_score:.3f}.')
+
         
     return train_losses, val_losses, bleu_scores
 
 """## 測試流程"""
 
-def test_process(config):
+def test_process(config, mode='testing'):
     # 準備測試資料
-    test_dataset = EN2CNDataset(config.data_path, config.max_output_len, 'testing')
-    test_loader = data.DataLoader(test_dataset, batch_size=1)
+    test_dataset = EN2CNDataset(config.data_path, config.max_output_len, mode)
+    test_loader = data.DataLoader(test_dataset, batch_size=128)
     # 建構模型
     model, optimizer = build_model(config, test_dataset.en_vocab_size, test_dataset.cn_vocab_size)
     print("\033[32;1mFinish build model\033[0m")
@@ -616,7 +666,7 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--test', type=str, help='predicted file')
     parser.add_argument('-g', '--gpu', type=str, default='3')
     parser.add_argument('-t', '--teacher-forcing-ratio', type=float, default=1.0)
-    parser.add_argument('-b', '--beam-search', type=int, default=False, help='Number of branches to do beam search. Disabled by default.')
+    parser.add_argument('-b', '--beam-search', type=int, default=1, help='Number of branches to do beam search. Disabled by default.')
     parser.add_argument('-a', '--attention', action='store_true')
     args = parser.parse_args()
 

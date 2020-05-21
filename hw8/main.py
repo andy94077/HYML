@@ -54,7 +54,7 @@ def build_model(embedding_dim, hidden_dim, max_seq_len, vocabulary_size_en, voca
         if with_attention:
             attention = build_attention(attention_dim, hidden_dim * 2, max_seq_len)
         embedding = Embedding(input_dim=vocabulary_size, output_dim=embedding_dim, input_length=max_seq_len)
-        grus = [Bidirectional(GRU(hidden_dim, return_sequences=True, return_state=True), merge_mode='concat') for _ in range(n_gru_layers)]
+        grus = [GRU(hidden_dim * 2, return_sequences=True, return_state=True) for _ in range(n_gru_layers)]
         dense = Dense(vocabulary_size, activation='softmax')
 
         inputs, states1, states2 = decoder_in[:, 0:1], [decoder_states1_in[:, i] for i in range(n_gru_layers)], [decoder_states2_in[:, i] for i in range(n_gru_layers)]

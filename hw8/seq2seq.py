@@ -204,7 +204,7 @@ class Decoder(nn.Module):
             self.attention = Attention(hid_dim)
         # 如果使用 Attention Mechanism 會使得輸入維度變化，請在這裡修改
         # e.g. Attention 接在輸入後面會使得維度變化，所以輸入維度改為
-        self.input_dim = emb_dim + hid_dim * 2# if isatt else emb_dim
+        self.input_dim = emb_dim + hid_dim * 2 if isatt else emb_dim
         self.rnn = nn.GRU(self.input_dim, self.hid_dim, self.n_layers, dropout = dropout, batch_first=True)
         self.embedding2vocab1 = nn.Linear(self.hid_dim, self.hid_dim * 2)
         self.embedding2vocab2 = nn.Linear(self.hid_dim * 2, self.hid_dim * 4)
@@ -221,8 +221,8 @@ class Decoder(nn.Module):
         if self.isatt:
             attn = self.attention(encoder_outputs, hidden)
             embedded = torch.cat([embedded, attn], dim=-1)
-        else:
-            embedded = torch.cat([embedded, encoder_outputs[:, -1:]], dim=-1)
+        # else:
+        #     embedded = torch.cat([embedded, encoder_outputs[:, -1:]], dim=-1)
         output, hidden = self.rnn(embedded, hidden)
         # output = [batch size, 1, hid dim]
         # hidden = [num_layers, batch size, hid dim]
@@ -247,19 +247,14 @@ class Attention(nn.Module):
     def __init__(self, hid_dim):
         super(Attention, self).__init__()
         self.hid_dim = hid_dim
-        units = 128
-        self.w1 = nn.Linear(self.hid_dim*2, units, bias=False) # for encoder_outputs
-        self.w2 = nn.Linear(self.hid_dim*2, units, bias=False)  # for decoder_hidden
-        self.w3 = nn.Linear(units, 1, bias=False)
+        self.W = nn.Linear(self.hid_dim * 2, self.hid_dim * 2, bias=False)
     
     def forward(self, encoder_outputs, decoder_hidden):
         # encoder_outputs = [batch size, sequence len, hid dim * directions]
         # decoder_hidden = [num_layers, batch size, hid dim * directions]
         # 一般來說是取 Encoder 最後一層的 hidden state 來做 attention
-        encoder_out = self.w1(encoder_outputs)
-        decoder_hid = self.w2(decoder_hidden[-1].unsqueeze(1))
-        added_tanh = torch.tanh(encoder_out + decoder_hid)
-        score = self.w3(added_tanh)
+        weights = self.W(encoder_outputs) # [batch size, sequence len, hid dim * directions]
+        score = torch.bmm(weights, decoder_hidden[0].unsqueeze(2))
         alpha = F.softmax(score, dim=1)  # [batch, sequence len, 1]
         attention = torch.bmm(encoder_outputs.transpose(1, 2), alpha)
 
@@ -499,7 +494,7 @@ def schedule_sampling(step, teacher_forcing_ratio, mode='const'):
 - 訓練階段
 """
 
-def train(model, optimizer, train_iter, loss_function, total_steps, summary_steps, train_dataset, teacher_forcing_ratio):
+def train(model, optimizer, train_iter, loss_function, total_steps, summary_steps, train_dataset, teacher_forcing_ratio, teacher_forcing_mode):
     model.train()
     model.zero_grad()
     losses = []
@@ -507,7 +502,7 @@ def train(model, optimizer, train_iter, loss_function, total_steps, summary_step
     for step in range(summary_steps):
         sources, targets = next(train_iter)
         sources, targets = sources.to(device), targets.to(device)
-        outputs, preds = model(sources, targets, schedule_sampling(step, teacher_forcing_ratio))
+        outputs, preds = model(sources, targets, schedule_sampling(step, teacher_forcing_ratio, teacher_forcing_mode))
         # targets 的第一個 token 是 <BOS> 所以忽略
         outputs = outputs[:, 1:].reshape(-1, outputs.size(2))
         targets = targets[:, 1:].reshape(-1)
@@ -570,7 +565,7 @@ def train_process(config):
     train_iter = infinite_iter(train_loader)
     # 準備檢驗資料
     val_dataset = EN2CNDataset(config.data_path, config.max_output_len, 'validation')
-    val_loader = data.DataLoader(val_dataset, batch_size=config.batch_size)
+    val_loader = data.DataLoader(val_dataset, batch_size=config.batch_size//config.beam_search)
     # 建構模型
     model, optimizer = build_model(config, train_dataset.en_vocab_size, train_dataset.cn_vocab_size)
     loss_function = nn.CrossEntropyLoss(ignore_index=0)
@@ -580,7 +575,7 @@ def train_process(config):
     total_steps = 0
     while total_steps < config.num_steps:
         # 訓練模型
-        model, optimizer, loss = train(model, optimizer, train_iter, loss_function, total_steps, config.summary_steps, train_dataset, config.teacher_forcing_ratio)
+        model, optimizer, loss = train(model, optimizer, train_iter, loss_function, total_steps, config.summary_steps, train_dataset, config.teacher_forcing_ratio, config.teacher_forcing_mode)
         train_losses.append(loss)
         # 檢驗模型
         val_loss, bleu_score, result = test(model, val_loader, loss_function, config.beam_search)
@@ -592,24 +587,24 @@ def train_process(config):
         
         # 儲存模型和結果
         if bleu_score > best_bleu_score and (total_steps % config.store_steps == 0 or total_steps >= config.num_steps):
-            print(f'bleu_score improved from {best_bleu_score:.3f} to {bleu_score:.3f}. Save model to {config.store_model_path}...')
+            print(f'bleu_score improved from {best_bleu_score:.5f} to {bleu_score:.5f}. Save model to {config.store_model_path}...')
             best_bleu_score = bleu_score
             save_model(model, optimizer, config.store_model_path, total_steps)
             with open(os.path.join(config.store_model_path, f'output_{total_steps}.txt'), 'w') as f:
                 for line in result:
                     print(line, file=f)
         else:
-            print(f'bleu_score does not improve from {best_bleu_score:.3f}.')
+            print(f'bleu_score does not improve from {best_bleu_score:.5f}.')
 
         
     return train_losses, val_losses, bleu_scores
 
 """## 測試流程"""
 
-def test_process(config, mode='testing'):
+def test_process(config):
     # 準備測試資料
-    test_dataset = EN2CNDataset(config.data_path, config.max_output_len, mode)
-    test_loader = data.DataLoader(test_dataset, batch_size=128)
+    test_dataset = EN2CNDataset(config.data_path, config.max_output_len, 'testing' if config.output_file else 'validation')
+    test_loader = data.DataLoader(test_dataset, batch_size=256//config.beam_search)
     # 建構模型
     model, optimizer = build_model(config, test_dataset.en_vocab_size, test_dataset.cn_vocab_size)
     print("\033[32;1mFinish build model\033[0m")
@@ -630,7 +625,7 @@ def test_process(config, mode='testing'):
 """
 
 class configurations(object):
-    def __init__(self, data_dir, model_path, with_attention, teacher_forcing_ratio, beam_search, output_file, no_training):
+    def __init__(self, data_dir, model_path, with_attention, teacher_forcing_ratio, teacher_forcing_mode, beam_search, output_file, no_training):
         self.batch_size = 256
         self.emb_dim = 256
         self.hid_dim = 512
@@ -647,6 +642,7 @@ class configurations(object):
         self.data_path = data_dir  # 資料存放的位置
         self.attention = with_attention  # 是否使用 Attention Mechanism
         self.teacher_forcing_ratio = teacher_forcing_ratio
+        self.teacher_forcing_mode = teacher_forcing_mode
         self.beam_search = beam_search
         self.output_file = output_file
 
@@ -666,13 +662,14 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--test', type=str, help='predicted file')
     parser.add_argument('-g', '--gpu', type=str, default='3')
     parser.add_argument('-t', '--teacher-forcing-ratio', type=float, default=1.0)
+    parser.add_argument('-tm', '--teacher-forcing-mode', default='const', help="mode = ['const', 'linear', 'exponential', 'inverse']")
     parser.add_argument('-b', '--beam-search', type=int, default=1, help='Number of branches to do beam search. Disabled by default.')
     parser.add_argument('-a', '--attention', action='store_true')
     args = parser.parse_args()
 
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
     config = configurations(args.data_dir, args.model_path, args.attention, args.teacher_forcing_ratio,
-        args.beam_search, args.test, args.no_training)
+        args.teacher_forcing_mode, args.beam_search, args.test, args.no_training)
     config.store_model_path = config.load_model_path = args.model_path
     print('config:\n', vars(config))
     if not args.no_training:

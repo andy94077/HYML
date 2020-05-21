@@ -616,7 +616,7 @@ def test_process(config):
     if config.output_file:
         with open(config.output_file, 'w') as f:
             for line in result:
-                print (line, file=f)
+                print (' '.join(line[1]), file=f)
 
     return test_loss, bleu_score
 

@@ -16,7 +16,10 @@ def load_data(data_dir, img_shape, normalize=True):
         trainX = np.load(os.path.join(data_dir, f'trainX{img_shape[0]}.npy'))
     else:
         trainX = read_image(os.path.join(data_dir, 'training'), img_shape)
-        np.save(os.path.join(data_dir, f'trainX{img_shape[0]}.npy'), trainX)
+        try:
+            np.save(os.path.join(data_dir, f'trainX{img_shape[0]}.npy'), trainX)
+        except:
+            pass
     trainX = trainX.astype(np.float32)
     if normalize:
         trainX = (trainX - 128) / 128

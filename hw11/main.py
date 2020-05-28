@@ -1,16 +1,16 @@
 import os, sys, argparse
 import importlib
 import numpy as np
-from keras.models import Model, Sequential
-from keras.layers import Input, Dense, BatchNormalization, Dropout, Conv2D, Conv2DTranspose, Flatten, Activation, GlobalAveragePooling2D, LeakyReLU
-from keras.optimizers import Adam, SGD
-from keras.initializers import RandomNormal
-from keras.regularizers import l2
-from keras.utils import plot_model
-from keras.preprocessing.image import ImageDataGenerator
-from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, CSVLogger, TensorBoard
-from keras import backend as K
-import tensorflow as tf
+from tensorflow.keras.models import Model, Sequential
+from tensorflow.keras.layers import Input, Dense, BatchNormalization, Dropout, Conv2D, Conv2DTranspose, Flatten, Activation, GlobalAveragePooling2D, LeakyReLU
+from tensorflow.keras.optimizers import Adam, SGD
+from tensorflow.keras.initializers import RandomNormal
+from tensorflow.keras.regularizers import l2
+from tensorflow.keras.utils import plot_model
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, CSVLogger, TensorBoard
+from tensorflow.keras import backend as K
+import tensorflow.compat.v1 as tf
 
 import utils
 
@@ -70,6 +70,49 @@ def build_model(img_shape, in_dim):
 
     return gan, generator, discriminator
 
+def train(model_path, gan, generator, discriminator, X, batch_size, epochs, training_ratio=3, seed=880301):
+    img_dir = model_path[:model_path.rfind('.h5')] + '_imgs'
+    os.makedirs(img_dir, exist_ok=True)
+    
+    dataset = tf.data.Dataset.from_tensor_slices(X).shuffle(20 * batch_size).batch(batch_size).repeat(training_ratio).prefetch(tf.data.experimental.AUTOTUNE)
+    np.random.seed(seed)
+    discriminator_trained_times = 0
+    for epoch in range(epochs):
+        for realX in dataset:
+            noise = np.random.uniform(size=(realX.shape[0], gan.input.shape[1]))
+
+            fakeX = generator.predict_on_batch(noise)
+
+            discriminator.trainable = True
+            real_loss = discriminator.train_on_batch(realX, np.ones(realX.shape[0]))
+            fake_loss = discriminator.train_on_batch(fakeX, np.zeros(fakeX.shape[0]))
+            if discriminator_trained_times < training_ratio:
+                discriminator_trained_times += 1
+                continue
+            discriminator_trained_times = 0
+            discriminator_loss = (real_loss + fake_loss) / 2
+
+            discriminator.trainable = False
+            generator_loss = gan.train_on_batch(noise, np.ones(noise.shape[0]))
+
+            print(f'epoch: {epoch:0{len(str(epochs))}}/{epochs}, gen_loss: {generator_loss:.5f}, dis_loss: {discriminator_loss:.5f}', end='\r')
+        print('')
+
+        gan.save_weights(model_path)
+        generate_grid_img(os.path.join(img_dir, f'{i:0{len(str(epochs))}}.jpg', generator)
+
+def generate_grid_img(img_path, generator, grid_size=(2, 8), seed=None):
+    if seed is not None:
+        np.random.seed(seed)
+    noise = np.random.uniform(size=(grid_size[0] * grid_size[1], generator.input[1:]))
+    imgs = generator.predict_on_batch(noise)
+    imgs = imgs.reshape(grid_size+imgs.shape[1:])
+    grid = []
+    for i in range(imgs.shape[0]):
+        grid.append(np.concatenate(imgs[i:i + 1], axis=1))
+    grid = np.concatenate(grid, axis=0)
+    cv2.imwrite(img_path, grid)
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('data_dir')
@@ -78,7 +121,6 @@ if __name__ == '__main__':
     parser.add_argument('-T', '--no-training', action='store_true')
     parser.add_argument('-s', '--test', type=str, help='predicted file')
     parser.add_argument('-r', '--seed', type=int, default=880301, help='random seed')
-    parser.add_argument('-e', '--ensemble', action='store_true', help='output npy file to ensemble later')
     parser.add_argument('-g', '--gpu', default='3', help='available gpu device')
 
     args = parser.parse_args()
@@ -93,17 +135,17 @@ if __name__ == '__main__':
     model_path = args.model_path
     training = not args.no_training
     test = args.test
-    ensemble = args.ensemble
     function = args.model_function
     seed = args.seed
     input_shape = (96, 96)
+    in_dim = 100
 
     if function not in globals():
         globals()[function] = getattr(importlib.import_module(function[:function.rfind('.')]), function.split('.')[-1])
-    model, generator, discriminator = globals()[function](input_shape + (3,), 100)
+    model, generator, discriminator = globals()[function](input_shape + (3,), in_dim)
     discriminator.compile(Adam(2e-4, beta_1=0.5), loss='binary_crossentropy')
-    model.compile(Adam(2e-4, beta_1=0.5), loss='binary_crossentropy')
     discriminator.trainable = False
+    model.compile(Adam(2e-4, beta_1=0.5), loss='binary_crossentropy')
     discriminator.summary()
     model.summary()
     
@@ -112,24 +154,10 @@ if __name__ == '__main__':
         print(f'\033[32;1mtrainX: {trainX.shape}\033[0m')
 
         batch_size = 128
-        checkpoint = ModelCheckpoint(model_path, 'val_acc', verbose=1, save_best_only=True, save_weights_only=True)
-        reduce_lr = ReduceLROnPlateau('val_acc', 0.8, 5, verbose=1, min_lr=1e-4)
-        #logger = CSVLogger(model_path+'.csv')
-        #tensorboard = TensorBoard(model_path[:model_path.rfind('.')]+'_logs', histogram_freq=1, batch_size=1024, write_grads=True, update_freq='epoch')
-        model.fit_generator(train_gen.flow(trainX, trainY, batch_size=batch_size), steps_per_epoch=trainX.shape[0]//batch_size, epochs=50, validation_data=(validX, validY), verbose=1, callbacks=[checkpoint, reduce_lr])
+        train(model_path, model, generator, discriminator, batch_size=batch_size, epochs=100)
     else:
         print('\033[32;1mLoading Model\033[0m')
 
     model.load_weights(model_path)
     if test:
-        testX = np.random.uniform(-1, 1, size=input_shape + (3,))
-        pred = model.predict(testX)
-        if ensemble:
-            np.save(test, pred)
-        else:
-            utils.generate_csv(pred, test)
-    else:
-        if not training:
-            trainX = utils.load_data(data_dir, input_shape)
-            print(f'\033[32;1mtrainX: {trainX.shape}\033[0m')
-        
+        generate_grid_img(test, generator, seed=seed)

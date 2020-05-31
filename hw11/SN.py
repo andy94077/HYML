@@ -179,7 +179,6 @@ def build_resnet_model(img_shape, in_dim):
             ResBlockTranspose(64, 3, padding='same', use_bias=False),  # [64, 64, 256]
             
             BatchNormalization(),
-            Activation('relu'),
             Conv2DTranspose(3, 3, padding='same', activation='tanh'), # [64, 64, 3]
         ], name='generator')
         return generator
@@ -211,6 +210,67 @@ def build_resnet_model(img_shape, in_dim):
     discriminator.compile(Adam(2e-4, beta_1=0.5), loss='hinge')
     discriminator.trainable = False
     gan.compile(Adam(2e-4, beta_1=0.5), loss='hinge')
+
+    return gan, generator, discriminator
+
+def build_model2(img_shape, in_dim):
+    def build_generator(in_dim):
+        generator = Sequential([
+            Dense(512*4*4, activation='relu', input_shape=(in_dim,), use_bias=False, kernel_initializer=RandomNormal(0, 0.02)),
+            BatchNormalization(),  # [4, 4, 512]
+            Reshape((4, 4, 512)),
+
+            Conv2DTranspose(256, 4, strides=2, padding='same', use_bias=False, activation='relu', kernel_initializer=RandomNormal(0, 0.02)),
+            BatchNormalization(), # [8, 8, 512]
+            
+            Conv2DTranspose(128, 4, strides=2, padding='same', use_bias=False, activation='relu', kernel_initializer=RandomNormal(0, 0.02)),
+            BatchNormalization(), # [16, 16, 128]
+            
+            Conv2DTranspose(64, 4, strides=2, padding='same', use_bias=False, activation='relu', kernel_initializer=RandomNormal(0, 0.02)),
+            BatchNormalization(),  # [32, 32, 64]
+            
+            Conv2DTranspose(64, 4, strides=2, padding='same', use_bias=False, activation='relu', kernel_initializer=RandomNormal(0, 0.02)),
+            BatchNormalization(),  # [64, 64, 64]
+            
+            Conv2DTranspose(3, 4, padding='same', activation='tanh', kernel_initializer=RandomNormal(0, 0.02)), # [64, 64, 3]
+        ], name='generator')
+        return generator
+    
+    def conv_block(filters, kernel_size, strides=1, padding='same'):
+        return Sequential([
+            Conv2D(filters, kernel_size, strides=strides, padding=padding, kernel_initializer=RandomNormal(0, 0.02), kernel_constraint=SpectralNormalization()),
+            BatchNormalization(),
+            LeakyReLU(0.2)
+        ])
+
+    def build_discriminator(img_shape):
+        discriminator = Sequential([
+            Conv2D(64, 5, strides=2, padding='same', input_shape=img_shape,
+                   kernel_initializer=RandomNormal(0, 0.02), kernel_constraint=SpectralNormalization()),
+            LeakyReLU(0.2),
+
+            conv_block(64, 3, strides=2),
+            conv_block(128, 3, strides=2),
+            conv_block(256, 3, strides=2),
+            conv_block(512, 3, strides=2),
+
+            Conv2D(1, 2, kernel_initializer=RandomNormal(0, 0.02),
+                   kernel_constraint=SpectralNormalization()),
+            Flatten()
+        ], name='discriminator')
+        return discriminator
+    
+    generator = build_generator(in_dim)
+    discriminator = build_discriminator(img_shape)
+
+    generator_in = Input((in_dim,), name='generator_in')
+    generator_out = generator(generator_in)
+    discriminator_out = discriminator(generator_out)
+    gan = Model(generator_in, discriminator_out, name='gan')
+
+    discriminator.compile(Adam(1e-4, beta_1=0.5), loss='hinge')
+    discriminator.trainable = False
+    gan.compile(Adam(1e-4, beta_1=0.5), loss='hinge')
 
     return gan, generator, discriminator
 

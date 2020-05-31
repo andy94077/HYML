@@ -69,6 +69,61 @@ def build_model(img_shape, in_dim):
 
     return gan, generator, discriminator
 
+def build_lsgan(img_shape, in_dim):
+    def build_generator(in_dim):
+        generator = Sequential([
+            Dense(512*4*4, activation='relu', input_shape=(in_dim,), use_bias=False, kernel_initializer=RandomNormal(0, 0.02)),
+            BatchNormalization(),  # [4, 4, 512]
+            Reshape((4, 4, 512)),
+
+            Conv2DTranspose(256, 4, strides=2, padding='same', use_bias=False, activation='relu', kernel_initializer=RandomNormal(0, 0.02)),
+            BatchNormalization(), # [8, 8, 512]
+            
+            Conv2DTranspose(128, 4, strides=2, padding='same', use_bias=False, activation='relu', kernel_initializer=RandomNormal(0, 0.02)),
+            BatchNormalization(), # [16, 16, 256]
+            
+            Conv2DTranspose(64, 4, strides=2, padding='same', use_bias=False, activation='relu', kernel_initializer=RandomNormal(0, 0.02)),
+            BatchNormalization(),  # [32, 32, 256]
+            
+            Conv2DTranspose(3, 4, strides=2, padding='same', activation='tanh', kernel_initializer=RandomNormal(0, 0.02)), # [64, 64, 3]
+        ], name='generator')
+        return generator
+    
+    def conv_block(filters, kernel_size, strides=1, padding='same'):
+        return Sequential([
+            Conv2D(filters, kernel_size, strides=strides, padding=padding, kernel_initializer=RandomNormal(0, 0.02)),
+            BatchNormalization(),
+            LeakyReLU(0.2)
+        ])
+
+    def build_discriminator(img_shape):
+        discriminator = Sequential([
+            Conv2D(64, 5, strides=2, padding='same', input_shape=img_shape, kernel_initializer=RandomNormal(0, 0.02)),
+            LeakyReLU(0.2),
+
+            conv_block(128, 3, strides=2),
+            conv_block(256, 3, strides=2),
+            conv_block(512, 3, strides=2),
+
+            Conv2D(1, 4, kernel_initializer=RandomNormal(0, 0.02)),
+            Flatten()
+        ], name='discriminator')
+        return discriminator
+    
+    generator = build_generator(in_dim)
+    discriminator = build_discriminator(img_shape)
+    gan = Sequential([
+        generator,
+        discriminator
+    ], 'gan')
+
+    discriminator.compile(Adam(2e-4, beta_1=0.5), loss='mse')
+    discriminator.trainable = False
+    gan.compile(Adam(2e-4, beta_1=0.5), loss='mse')
+
+    return gan, generator, discriminator
+
+
 def train(model_dir, gan, generator, discriminator, X, batch_size, epochs, training_ratio=3, generate_imgs_frequency=None, generate_csv=False, seed=880301):
     root = model_dir
     img_dir = os.path.join(model_dir, 'imgs')

@@ -8,14 +8,14 @@ from keras.utils import to_categorical
 
 def read_image(data_dir, input_shape):
     img_names = sorted(os.listdir(data_dir))
-    X = np.array([cv2.resize(cv2.imread(os.path.join(data_dir, n)), input_shape) for n in tqdm(img_names)])
+    X = np.array([cv2.resize(cv2.imread(os.path.join(data_dir, n)), input_shape) for n in tqdm(img_names) if n[-4:] == '.jpg'])
     return X
 
 def load_data(data_dir, img_shape, normalize=True):
     if os.path.exists(os.path.join(data_dir, f'trainX{img_shape[0]}.npy')):
         trainX = np.load(os.path.join(data_dir, f'trainX{img_shape[0]}.npy'))
     else:
-        trainX = read_image(os.path.join(data_dir, 'training'), img_shape)
+        trainX = read_image(data_dir, img_shape)
         try:
             np.save(os.path.join(data_dir, f'trainX{img_shape[0]}.npy'), trainX)
         except:
@@ -24,6 +24,18 @@ def load_data(data_dir, img_shape, normalize=True):
     if normalize:
         trainX = (trainX - 128) / 128
     return trainX
+
+def generate_grid_img(img_path, generator, grid_size=(2, 8), seed=None):
+    if seed is not None:
+        np.random.seed(seed)
+    noise = np.random.uniform(size=(grid_size[0] * grid_size[1],) + generator.input.shape[1:])
+    imgs = generator.predict_on_batch(noise)
+    imgs = imgs.reshape(grid_size+imgs.shape[1:])
+    grid = []
+    for i in range(imgs.shape[0]):
+        grid.append(np.concatenate(imgs[i], axis=1))
+    grid = np.concatenate(grid, axis=0)
+    cv2.imwrite(img_path, (grid * 128 + 128).astype(np.uint8))
 
 def train_test_split(X, Y, split_ratio=0.2, seed=880301):
     np.random.seed(seed)

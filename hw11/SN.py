@@ -2,7 +2,7 @@ import os, sys, argparse
 import importlib
 import numpy as np
 from tensorflow.keras.models import Model, Sequential
-from tensorflow.keras.layers import Input, Dense, BatchNormalization, Dropout, Conv2D, Conv2DTranspose, Flatten, Activation, GlobalAveragePooling2D, LeakyReLU, Reshape
+from tensorflow.keras.layers import Input, Dense, BatchNormalization, Dropout, Conv2D, Conv2DTranspose, Flatten, Activation, GlobalAveragePooling2D, LeakyReLU, Reshape, AveragePooling2D, UpSampling2D
 from tensorflow.keras.optimizers import Adam, SGD
 from tensorflow.keras.initializers import RandomNormal
 from tensorflow.keras.regularizers import l2
@@ -35,10 +35,83 @@ class SpectralNormalization(Constraint):
     def get_config(self):
         return {'n_iters': self.n_iters}
 
-def total_variation(y_true, y_pred):
-    print(y_pred.shape)
-    return tf.image.total_variation(y_pred)
+class ResBlockTranspose(tf.keras.layers.Layer):
+    def __init__(self, filters, kernel_size, padding='same', use_bias=True, **kwargs):
+        super(ResBlockTranspose, self).__init__(**kwargs)
+        self.layers = [
+            BatchNormalization(), Activation('relu'),
+            UpSampling2D(),
+            Conv2DTranspose(filters, kernel_size, padding=padding, use_bias=use_bias),
+            BatchNormalization(), Activation('relu'),
+            Conv2DTranspose(filters, kernel_size, padding=padding, use_bias=use_bias),
+        ]
+        self.shortcut_layers = [
+            Conv2DTranspose(filters, 1, padding=padding, use_bias=use_bias),
+            UpSampling2D()
+        ]
 
+    def call(self, input_tensor):
+        out = input_tensor
+        for layer in self.layers:
+            out = layer(out)
+        
+        shortcut = input_tensor
+        for layer in self.shortcut_layers:
+            shortcut = layer(shortcut)
+        
+        return out + shortcut
+
+class ResBlock(tf.keras.layers.Layer):
+    def __init__(self, filters, kernel_size, padding='same', **kwargs):
+        super(ResBlock, self).__init__(**kwargs)
+        self.layers = [
+            Activation('relu'),
+            Conv2D(filters, kernel_size, padding=padding, activation='relu', kernel_constraint=SpectralNormalization()),
+            Conv2D(filters, kernel_size, padding=padding, kernel_constraint=SpectralNormalization()),
+            AveragePooling2D()
+        ]
+        self.shortcut_layers = [
+            AveragePooling2D(),
+            Conv2D(filters, 1, padding=padding, kernel_constraint=SpectralNormalization()),
+        ]
+
+    def call(self, input_tensor):
+        out = input_tensor
+        for layer in self.layers:
+            out = layer(out)
+        
+        shortcut = input_tensor
+        for layer in self.shortcut_layers:
+            shortcut = layer(shortcut)
+        
+        return out + shortcut
+
+class OptimizedBlock(tf.keras.layers.Layer):
+    def __init__(self, filters, kernel_size, padding='same', **kwargs):
+        super(OptimizedBlock, self).__init__(**kwargs)
+        self.layers = [
+            Conv2D(filters, kernel_size, padding=padding, activation='relu',
+                   kernel_constraint=SpectralNormalization()),
+            Conv2D(filters, kernel_size, padding=padding, kernel_constraint=SpectralNormalization()),
+            AveragePooling2D()
+        ]
+        self.shortcut_layers = [
+            AveragePooling2D(),
+            Conv2D(filters, 1, padding=padding, kernel_constraint=SpectralNormalization())
+        ]
+
+    def call(self, input_tensor):
+        out = input_tensor
+        for layer in self.layers:
+            out = layer(out)
+        
+        shortcut = input_tensor
+        for layer in self.shortcut_layers:
+            shortcut = layer(shortcut)
+        
+        return out + shortcut
+
+    
 def build_model(img_shape, in_dim):
     def build_generator(in_dim):
         generator = Sequential([
@@ -86,13 +159,61 @@ def build_model(img_shape, in_dim):
     generator_in = Input((in_dim,), name='generator_in')
     generator_out = generator(generator_in)
     discriminator_out = discriminator(generator_out)
-    gan = Model(generator_in, [discriminator_out, generator_out], name='gan')
+    gan = Model(generator_in, discriminator_out, name='gan')
 
     discriminator.compile(Adam(1e-4, beta_1=0.5), loss='binary_crossentropy')
     discriminator.trainable = False
-    gan.compile(Adam(1e-4, beta_1=0.5), loss=['binary_crossentropy', total_variation], loss_weights=[1, 0])
+    gan.compile(Adam(1e-4, beta_1=0.5), loss='binary_crossentropy')
 
     return gan, generator, discriminator
+
+def build_resnet_model(img_shape, in_dim):
+    def build_generator(in_dim):
+        generator = Sequential([
+            Dense(512* 4* 4, activation='relu', input_shape=(in_dim,), use_bias=False),
+            Reshape((4, 4, 512)),  # [4, 4, 512]
+
+            ResBlockTranspose(512, 3, padding='same', use_bias=False), # [8, 8, 512]
+            ResBlockTranspose(256, 3, padding='same', use_bias=False), # [16, 16, 256]
+            ResBlockTranspose(128, 3, padding='same', use_bias=False), # [32, 32, 256]
+            ResBlockTranspose(64, 3, padding='same', use_bias=False),  # [64, 64, 256]
+            
+            BatchNormalization(),
+            Activation('relu'),
+            Conv2DTranspose(3, 3, padding='same', activation='tanh'), # [64, 64, 3]
+        ], name='generator')
+        return generator
+    
+    def build_discriminator(img_shape):
+        discriminator = Sequential([
+            OptimizedBlock(64, 3, input_shape=img_shape),  # [32, 32, 64]
+
+            ResBlock(128, 3),  # [16, 16, 128]
+            ResBlock(256, 3),  # [8, 8, 256]
+            ResBlock(512, 3),  # [4, 4, 512]
+            ResBlock(1024, 3),  # [2, 2, 512]
+
+            Activation('relu'),
+            GlobalAveragePooling2D(),
+            Dense(1, kernel_constraint=SpectralNormalization())
+        ], name='discriminator')
+        return discriminator
+    
+    generator = build_generator(in_dim)
+    discriminator = build_discriminator(img_shape)
+
+    generator_in = Input((in_dim,), name='generator_in')
+    generator_out = generator(generator_in)
+
+    discriminator_out = discriminator(generator_out)
+    gan = Model(generator_in, discriminator_out, name='gan')
+
+    discriminator.compile(Adam(2e-4, beta_1=0.5), loss='hinge')
+    discriminator.trainable = False
+    gan.compile(Adam(2e-4, beta_1=0.5), loss='hinge')
+
+    return gan, generator, discriminator
+
 
 def train(model_dir, gan, generator, discriminator, X, batch_size, epochs, training_ratio=3, generate_imgs_frequency=None, generate_csv=False, seed=880301):
     root = model_dir
@@ -101,9 +222,19 @@ def train(model_dir, gan, generator, discriminator, X, batch_size, epochs, train
     os.makedirs(img_dir, exist_ok=True)
     os.makedirs(model_dir, exist_ok=True)
     
+    if len(gan.metrics_names) == 1:
+        print_str = f'[{{}}/{X.shape[0]}], epoch: {{:0{len(str(epochs))}}}/{epochs}, ' + \
+                'G_loss: {:.5f}, D_loss: {:.5f}'
+    else:
+        print_str = f'[{{}}/{X.shape[0]}], epoch: {{:0{len(str(epochs))}}}/{epochs}, ' + \
+                'G_loss: {:.5f}, G_clf_loss: {:.5f}, G_tot_var_loss: {:.5f}, ' + \
+                'D_loss: {:.5f}'
     if generate_csv:
         csv = open(os.path.join(root, 'logs.csv'), 'w')
-        print('epoch,step,G_loss,G_bce_loss,G_tot_var_loss,D_loss', file=csv)
+        if len(gan.metrics_names) == 1:
+            print('epoch,step,G_loss,D_loss', file=csv)
+        else:
+            print('epoch,step,G_loss,G_clf_loss,G_tot_var_loss,D_loss', file=csv)
 
     np.random.seed(seed)
     step = 1
@@ -129,15 +260,16 @@ def train(model_dir, gan, generator, discriminator, X, batch_size, epochs, train
             discriminator_loss = (real_loss + fake_loss) / 2
 
             noise = np.random.uniform(size=(realX.shape[0],) + gan.input.shape[1:])
-            generator_loss, hinge_loss, tot_var_loss = gan.train_on_batch(noise, [np.ones(noise.shape[0])] * 2)
-            print(f'[{min((i+batch_size) // training_ratio, X.shape[0])}/{X.shape[0]}], epoch: {epoch+1:0{len(str(epochs))}}/{epochs},',
-                f'G_loss: {generator_loss:.5f}, G_bce_loss: {hinge_loss:.5f}, G_tot_var_loss: {tot_var_loss:.5f},',
-                f'D_loss: {discriminator_loss:.5f}', end='\r')
+            generator_losses = gan.train_on_batch(noise, [np.ones(noise.shape[0])] * max(1, len(gan.metrics_names) - 1))
+            if len(gan.metrics_names) == 1:
+                generator_losses = [generator_losses]
+            
+            print(print_str.format(min((i+batch_size) // training_ratio, X.shape[0]), epoch+1, *generator_losses, discriminator_loss), end='\r')
             if generate_imgs_frequency is not None and step % generate_imgs_frequency == 0:
                 gan.save_weights(os.path.join(model_dir, f'{epoch+1:0{len(str(epochs))}}_{step:05}.h5'))
                 utils.generate_grid_img(os.path.join(img_dir, f'{epoch+1:0{len(str(epochs))}}_{step:05}.jpg'), generator)
                 if generate_csv:
-                    print(f'{epoch+1},{step},{generator_loss},{hinge_loss},{tot_var_loss},{discriminator_loss}', file=csv)
+                    print(epoch + 1, step, *generator_losses, discriminator_loss, sep=',', file=csv)
             step += 1
         print('')
 
@@ -145,4 +277,4 @@ def train(model_dir, gan, generator, discriminator, X, batch_size, epochs, train
             gan.save_weights(os.path.join(model_dir, f'{epoch+1:0{len(str(epochs))}}.h5'))
             utils.generate_grid_img(os.path.join(img_dir, f'{epoch+1:0{len(str(epochs))}}.jpg'), generator)
             if generate_csv:
-                print(f'{epoch+1},{step},{generator_loss},{hinge_loss},{tot_var_loss},{discriminator_loss}', file=csv)
+                print(epoch + 1, step, *generator_losses, discriminator_loss, sep=',', file=csv)

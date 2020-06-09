@@ -15,9 +15,9 @@ def baseline_transform(seed):
     return [KMeans(n_clusters=10, n_jobs=-1, random_state=seed)]
 
 
-def improved_transform(seed=int(1e9) + 7):
-    return [PCA(32, whiten=True, random_state=seed),
-            KMeans(n_clusters=10, n_jobs=-1, random_state=seed)
+def improved_transform(seed=int(1e9) + 7, n_clusters=10):
+    return [PCA(2, whiten=True, random_state=seed),
+            KMeans(n_clusters=n_clusters, n_jobs=-1, random_state=seed)
     ]
 
 def improved_transform2(seed=int(1e9) + 7, n_clusters=10):

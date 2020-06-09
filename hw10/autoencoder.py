@@ -101,10 +101,9 @@ def build_vae(input_shape):
     '''
     def build_encoder(input_shape, latent_dim):
         inputs = Input(input_shape)
-        x = Conv2D(12, 4, strides=2, padding='same', activation='relu')(inputs)
-        x = Conv2D(24, 4, strides=2, padding='same', activation='relu')(x)
-        x = Conv2D(48, 4, strides=2, padding='same', activation='relu')(x)
-        # x = Conv2D(64, 4, strides=2, padding='same', activation='relu')(x)
+        x = Conv2D(32, 4, strides=2, padding='same', activation='relu')(inputs)
+        x = Conv2D(64, 4, strides=2, padding='same', activation='relu')(x)
+        x = Conv2D(128, 4, strides=2, padding='same', activation='relu')(x)
         x = Flatten()(x)
         mean = Dense(latent_dim)(x)
         logvar = Dense(latent_dim)(x)
@@ -116,16 +115,15 @@ def build_vae(input_shape):
 
     def build_decoder(latent_dim):
         decoder = Sequential([
-            Dense(4* 4* 48, activation='relu', input_shape=(latent_dim,)),
-            Reshape((4, 4, 48)),
-            # Conv2DTranspose(128, 4, strides=2, padding='same', activation='relu'),
-            Conv2DTranspose(24, 4, strides=2, padding='same', activation='relu'),
-            Conv2DTranspose(12, 4, strides=2, padding='same', activation='relu'),
+            Dense(4*4*128, activation='relu', input_shape=(latent_dim,)),
+            Reshape((4, 4, 128)),
+            Conv2DTranspose(64, 4, strides=2, padding='same', activation='relu'),
+            Conv2DTranspose(32, 4, strides=2, padding='same', activation='relu'),
             Conv2DTranspose(3, 4, strides=2, padding='same', activation='tanh')
         ], name='decoder')
         return decoder
 
-    latent_dim = 512
+    latent_dim = 256
     encoder = build_encoder(input_shape, latent_dim)
     # encoder.summary()
     decoder = build_decoder(latent_dim)

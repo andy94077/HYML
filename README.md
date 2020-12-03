@@ -1,5 +1,6 @@
 # HYML
-This is the repo of my homework of Machine Learning, National Taiwan University, Spring 2020.
+This is the repo of my homework on Machine Learning, National Taiwan University, Spring 2020.
+
 Course website: [http://speech.ee.ntu.edu.tw/~tlkagk/courses_ML20.html](http://speech.ee.ntu.edu.tw/~tlkagk/courses_ML20.html)
 
 ### HW1
